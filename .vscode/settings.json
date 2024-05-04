@@ -1,0 +1,6 @@
+{
+    "go.toolsEnvVars": {
+        "GOFLAGS": "-tags=e2e_tests"
+    },
+    "circleci.persistedProjectSelection": []
+}

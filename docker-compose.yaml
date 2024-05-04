@@ -1,0 +1,58 @@
+version: "3.9"
+
+services:
+  auth-api:
+    container_name: auth-api
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      - postgres_auth-api
+    ports:
+      - ${APP_PORT}:${APP_PORT}
+    networks:
+      - auth-api-network
+      - kafka_network
+
+  postgres_auth-api:
+    container_name: postgres_auth-api
+    image: postgres:16.1-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ${DATABASE_USERNAME}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      POSTGRES_DB: ${DATABASE_DBNAME}
+    expose:
+      - 5433
+    ports:
+      - 5433:5432
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - auth-api-network
+
+  # pgadmin:
+  #   image: dpage/pgadmin4
+  #   restart: always
+  #   environment:
+  #     PGADMIN_DEFAULT_EMAIL: admin@example.com
+  #     PGADMIN_DEFAULT_PASSWORD: admin
+  #     PGADMIN_CONFIG_WTF_CSRF_CHECK_DEFAULT: 'False'
+  #     PGADMIN_CONFIG_WTF_CSRF_ENABLED: 'False'
+  #   ports:
+  #     - "5050:80"
+  #   depends_on:
+  #     - postgres_userprof
+  #   networks:
+  #     - auth-api-network
+
+volumes:
+  postgres_data:
+
+
+networks:
+  auth-api-network:
+  kafka_network:
+    external: true
+    name: kafka_kafka_network

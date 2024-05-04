@@ -1,0 +1,21 @@
+version: "3.9"
+
+services:
+
+  pg-auth-test:
+    container_name: pg-auth-test
+    image: postgres:16.1-alpine
+    restart: always
+    env_file:
+      - env-example
+    environment:
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      POSTGRES_DB: ${DATABASE_DBNAME}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data_userprof_test:/var/lib/postgresql/data
+      - ./db/init-e2e.sql:/docker-entrypoint-initdb.d/init.sql
+
+volumes:
+  postgres_data_userprof_test:
