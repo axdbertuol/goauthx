@@ -9,6 +9,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/axdbertuol/goauthx/internal/services"
 	kc "github.com/axdbertuol/goauthx/internal/services/kafka_consumer"
 	"github.com/axdbertuol/goauthx/internal/utils"
 	goutils "github.com/axdbertuol/goutils/functions"
@@ -61,6 +62,7 @@ func main() {
 	// Initialize Echo instance
 	e := echo.New()
 	e.Debug = true
+
 	// Middleware
 	validator := validator.New()
 
@@ -110,21 +112,27 @@ func main() {
 			&slog.HandlerOptions{Level: slog.LevelError},
 		),
 	)
-	userProfRepo := repository.NewUserCredentialsRepository(db)
+
+	// Start repository
+	userCredRepo := repository.NewUserCredentialsRepository(db)
 
 	versionGroup := utils.CreateVersionedApiPath(e, "v1")
+
+	// Start services
+	authService := services.NewAuthService(userCredRepo, viper.GetViper())
+
 	// Initialize your handlers
 	handlers.
-		NewAuthHandler(userProfRepo, viper.GetViper()).
+		NewAuthHandler(authService).
 		RegisterAuthRoutes(versionGroup, internal_middleware.BearerAuthMiddleware)
+	aeh := handlers.NewAuthEventHandler(authService, logger)
 
 	e.GET("/swagger/*", echoSwagger.WrapHandler)
 	e.GET("/", func(c echo.Context) error {
 		return c.String(http.StatusOK, "Hello, World!")
 	})
 
-	aeh := handlers.NewAuthEventHandler(userProfRepo, logger)
-
+	// Start kafka consumer
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -146,6 +154,7 @@ func main() {
 		}
 	}()
 	port := viper.GetString("APP_PORT")
+
 	// Start server
 	log.Println("Server started at :" + port)
 	e.Logger.Fatal(e.Start(":" + port))
