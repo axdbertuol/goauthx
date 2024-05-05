@@ -1,28 +1,17 @@
 package handlers
 
 import (
-	"context"
-	"errors"
 	"net/http"
-	"time"
 
 	gud "github.com/axdbertuol/goutils/dtos"
-	goutils "github.com/axdbertuol/goutils/functions"
 	gut "github.com/axdbertuol/goutils/types"
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	"google.golang.org/api/idtoken"
 
-	"github.com/axdbertuol/auth_service/internal/constants"
-	"github.com/axdbertuol/auth_service/internal/dtos"
-	"github.com/axdbertuol/auth_service/internal/models"
-	"github.com/axdbertuol/auth_service/internal/repository"
-	"github.com/axdbertuol/auth_service/internal/services"
-	"github.com/axdbertuol/auth_service/internal/utils"
+	"github.com/axdbertuol/goauthx/internal/constants"
+	"github.com/axdbertuol/goauthx/internal/dtos"
+	"github.com/axdbertuol/goauthx/internal/models"
+	"github.com/axdbertuol/goauthx/internal/services"
 	"github.com/labstack/echo/v4"
-	"github.com/spf13/viper"
-	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
 )
 
 type Authenticator interface {
@@ -32,23 +21,18 @@ type Authenticator interface {
 		bearerMw func(echo.HandlerFunc) echo.HandlerFunc,
 	)
 }
-type AuthConfig struct {
-	jwtSecret string
-}
+
 type AuthHandler struct {
 	Authenticator
 	// Define any dependencies here
-	config              *AuthConfig
-	UserCredentialsRepo repository.StorableUserCredentialsRepository
+	authService services.AuthServicer
 }
 
 func NewAuthHandler(
-	ur repository.StorableUserCredentialsRepository,
-	config *viper.Viper,
+	as services.AuthServicer,
 ) Authenticator {
-	secret := config.GetString("JWT_SECRET")
 
-	return &AuthHandler{UserCredentialsRepo: ur, config: &AuthConfig{jwtSecret: secret}}
+	return &AuthHandler{authService: as}
 }
 
 func (ah *AuthHandler) RegisterAuthRoutes(
@@ -56,6 +40,7 @@ func (ah *AuthHandler) RegisterAuthRoutes(
 	bearerMw func(echo.HandlerFunc) echo.HandlerFunc,
 ) {
 	e.POST("/login", ah.Login)
+	e.POST("/google/login", ah.SignInWithGoogle)
 	e.POST("/renew-tokens", ah.RenewTokens, bearerMw)
 
 	e.GET("/user-credentials", ah.GetAllUserIdentities)
@@ -65,11 +50,6 @@ func (ah *AuthHandler) RegisterAuthRoutes(
 	e.DELETE("/user-credentials/:id", ah.DeleteUserCredentials)
 
 }
-
-const (
-	accessExpiresIn  = 1 * time.Minute
-	refreshExpiresIn = 24 * time.Hour
-)
 
 // SignUp handles user registration.
 // @Summary Register a new user
@@ -87,42 +67,16 @@ func (h *AuthHandler) CreateUserCredentials(c echo.Context) error {
 	// Parse request body
 	// Validate DTO
 	signUpDTO := new(dtos.CreateUserCredentialsDTO)
-
+	ucreds := new(models.UserCredentials)
 	if err := signUpDTO.BindAndValidate(c); err != nil {
 		return err
 	}
 
-	cred := &models.UserCredentials{
-		Username: signUpDTO.Username,
-		Email:    signUpDTO.Email,
-		Role:     signUpDTO.Role,
-		Status:   signUpDTO.Status,
+	if err := h.authService.CreateUserCredentials(ucreds, signUpDTO); err != nil {
+		return err
 	}
 
-	if signUpDTO.PasswordHash != nil {
-		cred.PasswordHash = &signUpDTO.PasswordHash
-	}
-	if signUpDTO.SocialId != "" {
-		cred.SocialId = &signUpDTO.SocialId
-	}
-
-	// Create user in the database
-	if err := h.UserCredentialsRepo.Create(cred); err != nil {
-		if errors.Is(err, gorm.ErrDuplicatedKey) {
-			return &gut.CustomError{
-				Code:         http.StatusConflict,
-				Message:      err.Error(),
-				InternalCode: ":AlreadyExists:UserCredentials",
-			}
-		}
-		return &gut.CustomError{
-			Code:         http.StatusInternalServerError,
-			Message:      err.Error(),
-			InternalCode: ":CreationFailure:UserCredentials",
-		}
-	}
-
-	return c.JSON(http.StatusCreated, cred.ToDto())
+	return c.JSON(http.StatusCreated, ucreds.ToDto())
 }
 
 // SignInWithGoogle handles the sign-in with Google functionality.
@@ -143,86 +97,17 @@ func (h *AuthHandler) CreateUserCredentials(c echo.Context) error {
 func (h *AuthHandler) SignInWithGoogle(c echo.Context) error {
 	var (
 		signUpDTO = new(dtos.LoginGoogleDTO)
-		uIdentity = new(models.UserCredentials)
+		tokenResp = new(dtos.TokenDTOResponse)
 	)
 	if err := signUpDTO.BindAndValidate(c); err != nil {
 		return err
 	}
 
-	payload, err := idtoken.Validate(
-		context.Background(),
-		signUpDTO.IdToken,
-		"",
-	)
-
-	if err != nil {
-		errMsg := err.Error() // Get the error message
-
-		return &gut.CustomError{
-			Code:         http.StatusBadRequest,
-			Message:      "Invalid id token: " + errMsg, // Append error message
-			InternalCode: "invalidIdToken:google",
-		}
-	}
-	if err := h.UserCredentialsRepo.
-		GetFirst(uIdentity, "social_id = ?", &payload.Subject); err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return &gut.CustomError{
-				Code:         http.StatusNotFound,
-				Message:      err.Error(),
-				InternalCode: "idToken:NotFound:google",
-			}
-		}
-		return &gut.CustomError{
-			Code:         http.StatusInternalServerError,
-			Message:      "Unable to process idToken", // Append error message
-			InternalCode: "idToken:UnknownError:google",
-		}
+	if err := h.authService.SignInWithGoogle(tokenResp, signUpDTO); err != nil {
+		return err
 	}
 
-	regClaims := &jwt.RegisteredClaims{
-		Issuer:   payload.Issuer,
-		Subject:  payload.Subject,
-		Audience: []string{payload.Audience},
-	}
-	jwtGenDto := &dtos.JwtGenDTO{
-		UserId:   uIdentity.UserId.String(),
-		Username: uIdentity.Username,
-		Email:    uIdentity.Email,
-		Role:     uIdentity.Role,
-	}
-	args := &services.TokensGen{
-		AccessToken: &services.TokenArgs{
-			User:      jwtGenDto,
-			ExpiresIn: accessExpiresIn,
-			RegClaims: regClaims,
-		},
-		RefreshToken: &services.TokenArgs{
-			User:      jwtGenDto,
-			ExpiresIn: refreshExpiresIn,
-			RegClaims: regClaims,
-		},
-		Secret: h.config.jwtSecret,
-	}
-	// secret := h.config.GetString("JWT_SECRET")
-	access_token, refresh_token, err := args.GenerateTokens()
-	if err != nil {
-		return &gut.CustomError{
-			Code:         http.StatusInternalServerError,
-			Message:      err.Error(),
-			InternalCode: "token:GenFailure:google",
-		}
-	}
-
-	return c.JSON(
-		http.StatusOK,
-		dtos.TokenDTOResponse{
-			Token:        access_token,
-			RefreshToken: refresh_token,
-			TokenExpires: time.Now().Add(accessExpiresIn),
-			User:         *uIdentity.ToDto(),
-		},
-	)
+	return c.JSON(http.StatusOK, tokenResp)
 }
 
 // Login handles user login.
@@ -240,127 +125,16 @@ func (h *AuthHandler) SignInWithGoogle(c echo.Context) error {
 func (h *AuthHandler) Login(c echo.Context) error {
 	// Parse request body
 	loginDTO := new(dtos.LoginDTO)
-	ucreds := new(models.UserCredentials)
-	secret := h.config.jwtSecret
-
+	tokenResp := new(dtos.TokenDTOResponse)
 	if err := loginDTO.BindAndValidate(c); err != nil {
 		return err
 	}
 
-	if loginDTO.Email != nil {
-		// Retrieve user by username
-		err := h.UserCredentialsRepo.GetUserByEmail(ucreds, *loginDTO.Email)
-		if err != nil {
-			return &gut.CustomError{
-				Code:         http.StatusUnauthorized,
-				Message:      err.Error(),
-				InternalCode: "email:InvalidCredentials:login",
-			}
-		}
-	} else if loginDTO.Username != nil {
-		err := h.UserCredentialsRepo.GetUserByUsername(ucreds, *loginDTO.Username)
-		if err != nil {
-			return &gut.CustomError{
-				Code:         http.StatusUnauthorized,
-				Message:      err.Error(),
-				InternalCode: "username:InvalidCredentials:login",
-			}
-		}
-	} else {
-		return &gut.CustomError{
-			Code:         http.StatusUnauthorized,
-			Message:      "invalid login:",
-			InternalCode: ":InvalidCredentials:login",
-		}
+	if err := h.authService.Login(tokenResp, loginDTO); err != nil {
+		return err
 	}
-
-	if ucreds.PasswordHash == nil {
-		return &gut.CustomError{
-			Code:         http.StatusUnauthorized,
-			Message:      "invalid login method, should try provider",
-			InternalCode: "password:InvalidCredentials:login",
-		}
-	}
-
-	if err := bcrypt.CompareHashAndPassword(*ucreds.PasswordHash, []byte(loginDTO.Password)); err != nil {
-		return &gut.CustomError{
-			Code:         http.StatusUnauthorized,
-			Message:      err.Error(),
-			InternalCode: "password:InvalidCredentials:login",
-		}
-	}
-
-	jwtGenDto := &dtos.JwtGenDTO{
-		UserId:   ucreds.UserId.String(),
-		Username: ucreds.Username,
-		Email:    ucreds.Email,
-		Role:     ucreds.Role,
-	}
-
-	tokenArgs := &services.TokensGen{
-		AccessToken: &services.TokenArgs{
-			User:      jwtGenDto,
-			ExpiresIn: accessExpiresIn,
-		},
-		RefreshToken: &services.TokenArgs{
-			User:      jwtGenDto,
-			ExpiresIn: refreshExpiresIn,
-		},
-		Secret: secret,
-	}
-
-	accessToken, refreshToken, err := tokenArgs.GenerateTokens()
-
-	if err != nil {
-		return &gut.CustomError{
-			Code:         http.StatusInternalServerError,
-			Message:      "failed to generate tokens: " + err.Error(),
-			InternalCode: "token:GenFailure:login",
-		}
-	}
-
 	// Return token in response
-	return c.JSON(
-		http.StatusOK,
-		dtos.TokenDTOResponse{
-			Token:        accessToken,
-			RefreshToken: refreshToken,
-			TokenExpires: time.Now().Add(accessExpiresIn),
-			User:         *ucreds.ToDto(),
-		},
-	)
-}
-
-// CheckTokenExpired checks if the provided token has expired.
-// @Summary Check Token Expiration
-// @Description Check if the provided JWT token has expired
-// @Tags Auth
-// @Accept json
-// @Produce json
-// @Param Authorization header string true "JWT token"
-// @Success 200 {string} string "Token is valid"
-// @Failure 400 {object} gud.ErrorResponse "Invalid token"
-// @Failure 401 {object} gud.ErrorResponse "Token is invalid"
-// @Router /auth/check-token [get]
-func (h *AuthHandler) CheckTokenExpired(c echo.Context) error {
-	reqToken := c.Request().Header.Get("Authorization")
-	if reqToken == "" {
-		return echo.NewHTTPError(http.StatusUnauthorized, gud.NewErrorResponse("missing token"))
-	}
-	sc := h.config.jwtSecret
-	claims, err := utils.ValidateJwt(reqToken, sc)
-	if err != nil {
-		return echo.NewHTTPError(
-			http.StatusBadRequest,
-			gud.NewErrorResponse("token validation failed:", err.Error()),
-		)
-	}
-
-	if time.Now().After(claims.ExpiresAt.Time) {
-		return c.JSON(http.StatusOK, "token expired")
-	}
-
-	return c.JSON(http.StatusNoContent, nil)
+	return c.JSON(http.StatusOK, tokenResp)
 }
 
 // RenewTokens refreshes the JWT token.
@@ -376,6 +150,9 @@ func (h *AuthHandler) CheckTokenExpired(c echo.Context) error {
 // @Failure 500 {object} gud.ErrorResponse "Failed to generate new token"
 // @Router /auth/renew-tokens [post]
 func (h *AuthHandler) RenewTokens(c echo.Context) error {
+
+	dto := &dtos.RenewTokensDTO{}
+	tokenResp := &dtos.TokenDTOResponse{}
 	accessToken, ok := c.Get("bearerToken").(string)
 
 	if accessToken == "" || !ok {
@@ -386,7 +163,6 @@ func (h *AuthHandler) RenewTokens(c echo.Context) error {
 		}
 		return customErr
 	}
-	dto := &dtos.RenewTokensDTO{}
 	if err := c.Bind(dto); err != nil {
 		return &gut.CustomError{
 			Code:         http.StatusBadRequest,
@@ -403,8 +179,6 @@ func (h *AuthHandler) RenewTokens(c echo.Context) error {
 		}
 	}
 
-	sc := h.config.jwtSecret
-
 	accessClaims, ok := c.Get("accessClaims").(*dtos.JwtCustomClaims)
 	if !ok || accessClaims == nil {
 		return &gut.CustomError{
@@ -414,62 +188,11 @@ func (h *AuthHandler) RenewTokens(c echo.Context) error {
 		}
 	}
 
-	refreshClaims, err := utils.ValidateJwt(dto.RefreshToken, sc)
-	if err != nil {
-		return &gut.CustomError{
-			Code:         http.StatusBadRequest,
-			Message:      "refreshToken jwt token failed validation:" + err.Error(),
-			InternalCode: "refreshToken:jwtValidationFailed:RenewTokens",
-		}
-	}
-	// Check if the token can be refreshed
-	if time.Now().After(refreshClaims.ExpiresAt.Time) {
-		return &gut.CustomError{
-			Code:         http.StatusBadRequest,
-			Message:      "refresh token is expired, user should log in again",
-			InternalCode: "refreshToken:Expired:RenewTokens",
-		}
+	if err := h.authService.RenewTokens(tokenResp, dto, accessClaims); err != nil {
+		return err
 	}
 
-	// Generate JWT token in auth-ms
-	tokenArgs := &services.TokensGen{
-		AccessToken: &services.TokenArgs{
-			Claims:    accessClaims,
-			ExpiresIn: accessExpiresIn,
-		},
-		RefreshToken: &services.TokenArgs{
-			Claims:    refreshClaims,
-			ExpiresIn: refreshExpiresIn,
-		},
-		Secret: h.config.jwtSecret,
-	}
-
-	access_token, refresh_token, err := tokenArgs.GenerateTokens()
-	if err != nil {
-		return &gut.CustomError{
-			Code:         http.StatusInternalServerError,
-			Message:      "token generation failed",
-			InternalCode: "token:GenFailure:RenewTokens",
-		}
-	}
-	user := new(models.UserCredentials)
-	if err := h.UserCredentialsRepo.GetUserByEmail(user, accessClaims.Email); err != nil {
-		return &gut.CustomError{
-			Code:         http.StatusNotFound,
-			Message:      err.Error(),
-			InternalCode: "user:NotFound:RenewTokens",
-		}
-	}
-
-	return c.JSON(
-		http.StatusOK,
-		dtos.TokenDTOResponse{
-			Token:        access_token,
-			RefreshToken: refresh_token,
-			TokenExpires: time.Now().Add(accessExpiresIn),
-			User:         *user.ToDto(),
-		},
-	)
+	return c.JSON(http.StatusOK, tokenResp)
 }
 
 // GetUserCredentialsByID handles the request to retrieve a user profile by ID.
@@ -483,24 +206,23 @@ func (h *AuthHandler) RenewTokens(c echo.Context) error {
 // @Failure 500 {object} gud.ErrorResponse
 // @Router /user/profile/{id} [get]
 func (h *AuthHandler) GetUserCredentialsByID(c echo.Context) error {
+	dto := new(dtos.UserCredentialsResponse)
+	ucreds := new(models.UserCredentials)
+
 	userProfID, err := uuid.Parse(c.Param("user_id"))
 	if err != nil {
-		return echo.NewHTTPError(
-			http.StatusInternalServerError,
-			gud.NewErrorResponse("invalid id"),
-		)
-	}
-	var user models.UserCredentials
-	if err := h.UserCredentialsRepo.GetById(&user, userProfID); err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return echo.NewHTTPError(http.StatusNotFound, gud.NewErrorResponse("user not found"))
+		return &gut.CustomError{
+			Code:         http.StatusBadRequest,
+			Message:      "invalid user id",
+			InternalCode: "userId:Invalid:GetUserCredentialsByID",
 		}
-		return echo.NewHTTPError(
-			http.StatusInternalServerError,
-			gud.NewErrorResponse("failed to retrieve user"),
-		)
 	}
-	return c.JSON(http.StatusOK, user.ToDto())
+	dto.UserId = userProfID
+	if err := h.authService.GetUserCredentialsByID(ucreds, dto); err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusOK, dto)
 }
 
 // UpdateUserCredentials handles the request to update a user profile.
@@ -517,57 +239,44 @@ func (h *AuthHandler) GetUserCredentialsByID(c echo.Context) error {
 // @Failure 500 {object} gud.ErrorResponse
 // @Router /user/profile/{id} [put]
 func (h *AuthHandler) UpdateUserCredentials(c echo.Context) error {
+	ucreds := new(models.UserCredentials)
+	dto := new(dtos.UpdateUserCredentialsDTO)
+
 	id := c.Param("user_id")
-	UserCredentialsID, err := uuid.Parse(id)
+	userId, err := uuid.Parse(id)
 	if err != nil {
-		return echo.NewHTTPError(
-			http.StatusBadRequest,
-			gud.NewErrorResponse("invalid id ", err.Error()),
-		)
-	}
-	if err := h.UserCredentialsRepo.GetById(&models.UserCredentials{}, UserCredentialsID); err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return echo.NewHTTPError(http.StatusNotFound, gud.NewErrorResponse("user not found"))
+		return &gut.CustomError{
+			Code:         http.StatusBadRequest,
+			Message:      err.Error(),
+			InternalCode: "userId:Invalid:UpdateUserCredentials",
 		}
-		return echo.NewHTTPError(
-			http.StatusInternalServerError,
-			gud.NewErrorResponse("failed to retrieve user"),
-		)
 	}
-	dto := dtos.UpdateUserCredentialsDTO{}
+
 	// Bind the request body to the user struct
 	if err := c.Bind(&dto); err != nil {
-		return echo.NewHTTPError(
-			http.StatusBadRequest,
-			gud.NewErrorResponse("invalid request payload"),
-		)
+		return &gut.CustomError{
+			Code:         http.StatusBadRequest,
+			Message:      err.Error(),
+			InternalCode: "userId:BindFail:UpdateUserCredentials",
+		}
 	}
+
+	dto.UserId = userId
 
 	// Validate the user struct
 	if err := c.Validate(&dto); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		return &gut.CustomError{
+			Code:         http.StatusBadRequest,
+			Message:      err.Error(),
+			InternalCode: "userId:Invalid:UpdateUserCredentials",
+		}
 	}
 
-	user := &models.UserCredentials{
-		UserId: UserCredentialsID,
+	if err := h.authService.UpdateUserCredentials(ucreds, dto); err != nil {
+		return err
 	}
 
-	if dto.Username != nil {
-		user.Username = *dto.Username
-	}
-
-	if dto.Email != nil {
-		user.Email = *dto.Email
-	}
-
-	if err := h.UserCredentialsRepo.Update(user); err != nil {
-		return echo.NewHTTPError(
-			http.StatusInternalServerError,
-			gud.NewErrorResponse("failed to update user"),
-		)
-	}
-
-	return c.JSON(http.StatusOK, user.ToDto())
+	return c.JSON(http.StatusOK, dto)
 }
 
 // GetAllUserCredentialss handles the request to retrieve all user profiles.
@@ -578,18 +287,13 @@ func (h *AuthHandler) UpdateUserCredentials(c echo.Context) error {
 // @Failure 500 {object} gud.ErrorResponse
 // @Router /user/profile [get]
 func (h *AuthHandler) GetAllUserIdentities(c echo.Context) error {
-	var users []models.UserCredentials
-	if err := h.UserCredentialsRepo.GetAll(&users, c.Request()); err != nil {
-		return echo.NewHTTPError(
-			http.StatusInternalServerError,
-			gud.NewErrorResponse("failed to retrieve user profiles"),
-		)
+
+	ucreds, err := h.authService.GetAllUserIdentities(c.Request())
+	if err != nil {
+		return err
 	}
 
-	mapFunc := func(user models.UserCredentials) *dtos.UserCredentialsResponse {
-		return user.ToDto()
-	}
-	return c.JSON(http.StatusOK, goutils.Map2(users, mapFunc))
+	return c.JSON(http.StatusOK, ucreds)
 }
 
 // DeleteUserCredentials handles the request to delete a user profile.
@@ -611,21 +315,8 @@ func (h *AuthHandler) DeleteUserCredentials(c echo.Context) error {
 			gud.NewErrorResponse("invalid id ", err.Error()),
 		)
 	}
-	var user models.UserCredentials
-	if err := h.UserCredentialsRepo.GetFirst(&user, "id = ?", actualUserId); err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return echo.NewHTTPError(http.StatusNotFound, gud.NewErrorResponse("user not found"))
-		}
-		return echo.NewHTTPError(
-			http.StatusInternalServerError,
-			gud.NewErrorResponse("failed to retrieve user"),
-		)
-	}
-	if err := h.UserCredentialsRepo.Delete(&user, actualUserId); err != nil {
-		return echo.NewHTTPError(
-			http.StatusInternalServerError,
-			gud.NewErrorResponse("failed to delete user profile"),
-		)
+	if err := h.authService.DeleteUserCredentials(actualUserId); err != nil {
+		return err
 	}
 
 	return c.NoContent(http.StatusNoContent)
