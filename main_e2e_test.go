@@ -12,11 +12,11 @@ import (
 	"os"
 	"testing"
 
-	"github.com/axdbertuol/auth_service/internal/dtos"
-	"github.com/axdbertuol/auth_service/internal/handlers"
-	internal_middleware "github.com/axdbertuol/auth_service/internal/middleware"
-	"github.com/axdbertuol/auth_service/internal/models"
-	"github.com/axdbertuol/auth_service/internal/utils"
+	"github.com/axdbertuol/goauthx/internal/dtos"
+	"github.com/axdbertuol/goauthx/internal/handlers"
+	internal_middleware "github.com/axdbertuol/goauthx/internal/middleware"
+	"github.com/axdbertuol/goauthx/internal/models"
+	"github.com/axdbertuol/goauthx/internal/utils"
 	goutils "github.com/axdbertuol/goutils/functions"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
@@ -26,7 +26,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
-	"github.com/axdbertuol/auth_service/internal/repository"
+	"github.com/axdbertuol/goauthx/internal/repository"
 	gum "github.com/axdbertuol/goutils/middleware"
 )
 

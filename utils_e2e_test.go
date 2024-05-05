@@ -10,7 +10,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/axdbertuol/auth_service/internal/dtos"
+	"github.com/axdbertuol/goauthx/internal/dtos"
 	"github.com/stretchr/testify/assert"
 )
 

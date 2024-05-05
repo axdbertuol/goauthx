@@ -3,8 +3,8 @@ package mock_repository
 import (
 	"net/http"
 
-	"github.com/axdbertuol/auth_service/internal/models"
-	"github.com/axdbertuol/auth_service/internal/repository"
+	"github.com/axdbertuol/goauthx/internal/models"
+	"github.com/axdbertuol/goauthx/internal/repository"
 	"github.com/stretchr/testify/mock"
 	"gorm.io/gorm"
 )

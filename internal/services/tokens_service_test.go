@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/axdbertuol/auth_service/internal/dtos"
-	"github.com/axdbertuol/auth_service/internal/services"
+	"github.com/axdbertuol/goauthx/internal/dtos"
+	"github.com/axdbertuol/goauthx/internal/services"
 	"github.com/stretchr/testify/assert"
 )
 

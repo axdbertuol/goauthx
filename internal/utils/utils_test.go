@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/axdbertuol/auth_service/internal/utils"
+	"github.com/axdbertuol/goauthx/internal/utils"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 )
