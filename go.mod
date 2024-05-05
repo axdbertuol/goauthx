@@ -1,4 +1,4 @@
-module github.com/axdbertuol/auth_service
+module github.com/axdbertuol/goauthx
 
 go 1.22
 
