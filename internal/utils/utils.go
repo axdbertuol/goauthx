@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/axdbertuol/auth_service/internal/dtos"
+	"github.com/axdbertuol/goauthx/internal/dtos"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
 	"github.com/nrednav/cuid2"

@@ -7,7 +7,7 @@ import (
 
 	gut "github.com/axdbertuol/goutils/types"
 
-	"github.com/axdbertuol/auth_service/internal/utils"
+	"github.com/axdbertuol/goauthx/internal/utils"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
 	"github.com/spf13/viper"

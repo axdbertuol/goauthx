@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/axdbertuol/auth_service/internal/dtos"
+	"github.com/axdbertuol/goauthx/internal/dtos"
 	"github.com/go-playground/validator/v10"
 	"github.com/golang-jwt/jwt/v5"
 )

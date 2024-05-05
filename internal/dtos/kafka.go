@@ -11,7 +11,7 @@ type Event struct {
 	Payload interface{} `json:"payload"`
 }
 
-type UserPayload struct {
+type UserCreatePayload struct {
 	UserId   string `json:"userId"   validate:"required,gte=1"`
 	Username string `json:"username" validate:"required,min=4"`
 }
@@ -24,7 +24,7 @@ func (e Event) ToJSON() (string, error) {
 	return marshalJSON(e)
 }
 
-func (up UserPayload) ToJSON() (string, error) {
+func (up UserCreatePayload) ToJSON() (string, error) {
 	return marshalJSON(up)
 }
 

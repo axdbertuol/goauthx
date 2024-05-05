@@ -1,7 +1,7 @@
 package repository
 
 import (
-	"github.com/axdbertuol/auth_service/internal/models"
+	"github.com/axdbertuol/goauthx/internal/models"
 	"gorm.io/gorm"
 )
 
@@ -11,8 +11,8 @@ type StorableUserCredentialsRepository interface {
 	GetUserByUsername(user *models.UserCredentials, username string) error
 	GetUserByEmail(user *models.UserCredentials, email string) error
 	GetFirst(user *models.UserCredentials, conds ...interface{}) error
-	GetUserWithToken(entity *models.UserCredentials, entityName string, conds ...interface{}) error
 	UpdatePassword(user *models.UserCredentials) error
+	UpdateUserCredentials(user *models.UserCredentials, selected *[]string) error
 }
 type UserCredentialsRepository struct {
 	GormRepository
@@ -65,12 +65,16 @@ func (ur *UserCredentialsRepository) UpdatePassword(user *models.UserCredentials
 	return nil
 }
 
-func (ur *UserCredentialsRepository) GetUserWithToken(
+func (ur *UserCredentialsRepository) UpdateUserCredentials(
 	user *models.UserCredentials,
-	entityName string,
-	conds ...interface{},
+	selected *[]string,
 ) error {
-	if err := ur.Db.Preload(entityName).First(user, conds...).Error; err != nil {
+	tx := ur.Db.Model(user).Where("user_id = ?", user.UserId)
+	if selected != nil {
+		tx = tx.Select(selected)
+	}
+
+	if err := tx.Updates(user).Error; err != nil {
 		return err
 	}
 	return nil

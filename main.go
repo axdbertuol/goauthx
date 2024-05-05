@@ -1,12 +1,16 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
+	"os"
 	"time"
 
-	"github.com/axdbertuol/auth_service/internal/utils"
+	kc "github.com/axdbertuol/goauthx/internal/services/kafka_consumer"
+	"github.com/axdbertuol/goauthx/internal/utils"
 	goutils "github.com/axdbertuol/goutils/functions"
 	gum "github.com/axdbertuol/goutils/middleware"
 	"github.com/go-playground/validator/v10"
@@ -16,11 +20,11 @@ import (
 	"github.com/spf13/viper"
 	echoSwagger "github.com/swaggo/echo-swagger"
 
-	_ "github.com/axdbertuol/auth_service/docs"
-	"github.com/axdbertuol/auth_service/internal/handlers"
-	internal_middleware "github.com/axdbertuol/auth_service/internal/middleware"
-	"github.com/axdbertuol/auth_service/internal/models"
-	"github.com/axdbertuol/auth_service/internal/repository"
+	_ "github.com/axdbertuol/goauthx/docs"
+	"github.com/axdbertuol/goauthx/internal/handlers"
+	internal_middleware "github.com/axdbertuol/goauthx/internal/middleware"
+	"github.com/axdbertuol/goauthx/internal/models"
+	"github.com/axdbertuol/goauthx/internal/repository"
 )
 
 // @title Swagger Example API
@@ -100,7 +104,12 @@ func main() {
 			panic("failed to create tables" + err.Error())
 		}
 	}
-
+	logger := slog.New(
+		slog.NewJSONHandler(
+			os.Stdout,
+			&slog.HandlerOptions{Level: slog.LevelError},
+		),
+	)
 	userProfRepo := repository.NewUserCredentialsRepository(db)
 
 	versionGroup := utils.CreateVersionedApiPath(e, "v1")
@@ -113,6 +122,29 @@ func main() {
 	e.GET("/", func(c echo.Context) error {
 		return c.String(http.StatusOK, "Hello, World!")
 	})
+
+	aeh := handlers.NewAuthEventHandler(userProfRepo, logger)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var (
+		quitCh = make(chan struct{}, 1)
+		errCh  = make(chan error, 10)
+	)
+	args := kc.KafkaConsumerArgs{
+		Ctx:             ctx,
+		SignalCh:        quitCh,
+		ErrCh:           errCh,
+		SwitchEventFunc: aeh.SwitchEvents,
+	}
+
+	go kc.Start(args)
+	go func() {
+		for err := range errCh {
+			log.Println("Kafka consumer error:", err)
+		}
+	}()
 	port := viper.GetString("APP_PORT")
 	// Start server
 	log.Println("Server started at :" + port)

@@ -3,7 +3,7 @@ package dtos
 import (
 	"net/http"
 
-	"github.com/axdbertuol/auth_service/internal/constants"
+	"github.com/axdbertuol/goauthx/internal/constants"
 	gut "github.com/axdbertuol/goutils/types"
 
 	"github.com/labstack/echo/v4"

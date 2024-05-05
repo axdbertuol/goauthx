@@ -4,36 +4,41 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
 
 type UpdateUserCredentialsDTO struct {
-	Username     *string `json:"username,omitempty"     validate:"omitnil,min=5"`
-	FirstName    *string `json:"firstName,omitempty"    validate:"omitnil,min=2"`
-	LastName     *string `json:"lastName,omitempty"     validate:"omitnil,min=2"`
-	Email        *string `json:"email,omitempty"        validate:"omitnil,email"`
-	PasswordHash *string `json:"passwordHash,omitempty" validate:"omitnil"`
+	UserId       uuid.UUID `json:"userId"                 validate:"required"`
+	Username     *string   `json:"username,omitempty"     validate:"omitempty"`
+	Email        *string   `json:"email,omitempty"        validate:"omitempty,email"`
+	PasswordHash *[]byte   `json:"passwordHash,omitempty" validate:"omitempty"`
+	Status       *string   `json:"status,omitempty"       validate:"omitempty"`
+	Role         *string   `json:"role,omitempty"         validate:"omitempty"`
+	SocialId     *string   `json:"socialId,omitempty"     validate:"omitempty"`
 }
 
 type UserCredentialsResponse struct {
-	ID        uint    `json:"id"`
-	CreatedAt string  `json:"createdAt"`
-	UpdatedAt string  `json:"updatedAt"`
-	DeletedAt string  `json:"deletedAt"`
-	Email     string  `json:"email"`
-	Role      string  `json:"role"`
-	Username  string  `json:"username"`
-	SocialId  *string `json:"socialId"`
-	Status    string  `json:"status"`
+	ID        uint      `json:"id"`
+	CreatedAt string    `json:"createdAt"`
+	UpdatedAt string    `json:"updatedAt"`
+	DeletedAt string    `json:"deletedAt"`
+	Email     string    `json:"email"`
+	Role      string    `json:"role"`
+	Username  string    `json:"username"`
+	SocialId  *string   `json:"socialId"`
+	Status    string    `json:"status"`
+	UserId    uuid.UUID `json:"userId"`
 }
 
 type CreateUserCredentialsDTO struct {
-	Username     string `json:"username"               validate:"required"`
-	Email        string `json:"email"                  validate:"required,email"`
-	PasswordHash []byte `json:"passwordHash,omitempty" validate:"omitempty,required_without=SocialId"`
-	Status       string `json:"status"                 validate:"required"`
-	Role         string `json:"role"                   validate:"required"`
-	SocialId     string `json:"socialId,omitempty"     validate:"omitempty,required_without=PasswordHash"`
+	UserId       uuid.UUID `json:"userId"                 validate:"required"`
+	Username     string    `json:"username"               validate:"required"`
+	Email        string    `json:"email"                  validate:"required,email"`
+	PasswordHash []byte    `json:"passwordHash,omitempty" validate:"omitempty,required_without=SocialId"`
+	Status       string    `json:"status"                 validate:"required"`
+	Role         string    `json:"role"                   validate:"required"`
+	SocialId     string    `json:"socialId,omitempty"     validate:"omitempty,required_without=PasswordHash"`
 }
 
 func (u *CreateUserCredentialsDTO) BindAndValidate(c echo.Context) error {

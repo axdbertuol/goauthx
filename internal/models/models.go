@@ -3,7 +3,7 @@ package models
 import (
 	"errors"
 
-	"github.com/axdbertuol/auth_service/internal/dtos"
+	"github.com/axdbertuol/goauthx/internal/dtos"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -16,7 +16,7 @@ type Transfer interface {
 type UserCredentials struct {
 	gorm.Model
 
-	UserId       uuid.UUID `gorm:"type:uuid;"`
+	UserId       uuid.UUID `gorm:"primaryKey;type:uuid;"`
 	Username     string    `gorm:"unique;not null"                     json:"username"` // username is from the auth microservice
 	Email        string    `gorm:"unique;not null"                     json:"email"`    // email is from the auth micro
 	PasswordHash *[]byte   `                                           json:"passwordHash"`
@@ -32,7 +32,7 @@ func (u *UserCredentials) Validate() error {
 	}
 	return nil
 }
-func (up UserCredentials) ToDto() *dtos.UserCredentialsResponse {
+func (up *UserCredentials) ToDto() *dtos.UserCredentialsResponse {
 
 	dto := &dtos.UserCredentialsResponse{
 		ID:        up.ID,
@@ -43,6 +43,7 @@ func (up UserCredentials) ToDto() *dtos.UserCredentialsResponse {
 		Role:      up.Role,
 		Status:    up.Status,
 		SocialId:  up.SocialId,
+		UserId:    up.UserId,
 	}
 
 	return dto
