@@ -15,7 +15,6 @@ import (
 )
 
 type Authenticator interface {
-	Handler
 	RegisterAuthRoutes(
 		e *echo.Group,
 		bearerMw func(echo.HandlerFunc) echo.HandlerFunc,

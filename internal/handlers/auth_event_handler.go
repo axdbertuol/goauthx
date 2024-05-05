@@ -14,7 +14,6 @@ import (
 )
 
 type AuthEventHandler struct {
-	Handler
 	authService services.AuthServicer
 	validator   *validator.Validate
 	logger      *slog.Logger

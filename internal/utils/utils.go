@@ -88,7 +88,7 @@ func DecodeEmailHash(hexString string) (*string, int64, error) {
 
 func GenerateCuid(fingerprint string, length int) (string, error) {
 	len := length
-	if len <= 0 || len > 32 {
+	if len < 2 || len > 32 {
 		len = 12
 	}
 	generate, err := cuid2.Init(
