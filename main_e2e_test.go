@@ -16,6 +16,7 @@ import (
 	"github.com/axdbertuol/goauthx/internal/handlers"
 	internal_middleware "github.com/axdbertuol/goauthx/internal/middleware"
 	"github.com/axdbertuol/goauthx/internal/models"
+	"github.com/axdbertuol/goauthx/internal/services"
 	"github.com/axdbertuol/goauthx/internal/utils"
 	goutils "github.com/axdbertuol/goutils/functions"
 	"github.com/go-playground/validator/v10"
@@ -79,7 +80,6 @@ func TestMain(m *testing.M) {
 	// }
 	// Set up Echo instance
 	e = echo.New()
-	versionGroup := utils.CreateVersionedApiPath(e, "v1")
 	// Middleware
 	validator := validator.New()
 
@@ -89,11 +89,18 @@ func TestMain(m *testing.M) {
 	// e.Use(middleware.Recover())
 	e.Use(gum.ErrorMiddleware)
 
-	userProfRepo := repository.NewUserCredentialsRepository(db)
+	// Initialize your handlers
+	// Start repository
+	userCredRepo := repository.NewUserCredentialsRepository(db)
+
+	versionGroup := utils.CreateVersionedApiPath(e, "v1")
+
+	// Start services
+	authService := services.NewAuthService(userCredRepo, viper.GetViper())
 
 	// Initialize your handlers
 	handlers.
-		NewAuthHandler(userProfRepo, config).
+		NewAuthHandler(authService).
 		RegisterAuthRoutes(versionGroup, internal_middleware.BearerAuthMiddleware)
 
 	go func() {
@@ -143,6 +150,7 @@ func TestCreateUserCredentialsWithEmail_E2E(t *testing.T) {
 	// Create a sample login request body
 	email := "test@example.com"
 	signupRequest := dtos.CreateUserCredentialsDTO{
+		UserId:       uuid.New(),
 		Username:     "Teste",
 		PasswordHash: hashedPassword,
 		Email:        email,
