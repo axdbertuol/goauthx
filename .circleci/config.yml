@@ -5,6 +5,13 @@ jobs:
   test-go:
     docker:
     - image: cimg/go:1.22
+      environment:
+        CIRCLECI: true
+    - image: axdr3/cci-pg-uuid:0.0.2
+      environment:
+        POSTGRES_USER: postgres
+        POSTGRES_DB: test-db
+        POSTGRES_PASSWORD: postgres
     steps:
       - checkout
       - run:
@@ -12,9 +19,7 @@ jobs:
           command: wget https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSION/dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz && sudo tar -C /usr/local/bin -xzvf dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz && rm dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz
           environment:
             DOCKERIZE_VERSION: v0.6.1
-      - run:
-            name: Wait for db
-            command: dockerize -wait tcp://localhost:5432 -timeout 1m
+
       - run:
           name: Download Go modules
           command: go mod download
@@ -32,8 +37,11 @@ jobs:
       - store_test_results:
           path: junit.xml
       - run:
+          name: Wait for db
+          command: dockerize -wait tcp://localhost:5432 -timeout 1m
+      - run:
           name: Run e2e tests
-          command: go test -tags e2e_tests
+          command: go test -tags e2e_tests -exec "env CI=true"
 
   build-go-executables:
     # Build go executables and store them as artifacts

@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"net/http/httptest"
@@ -50,6 +51,9 @@ const (
 )
 
 func TestMain(m *testing.M) {
+	var (
+		dsn string
+	)
 	ctx := context.Background()
 
 	// Set up test database
@@ -57,34 +61,46 @@ func TestMain(m *testing.M) {
 	config.SetConfigFile("env-example")
 	config.SetConfigType("env")
 	config.ReadInConfig()
-	dbName := config.GetString("DATABASE_DBNAME")
-	dbUser := config.GetString("DATABASE_USER")
-	dbPassword := config.GetString("DATABASE_PASSWORD")
-	postgresContainer, err := postgres.RunContainer(ctx,
-		testcontainers.WithImage("docker.io/postgres:16-alpine"),
-		postgres.WithInitScripts(filepath.Join("db", "init-e2e.sql")),
-		// postgres.WithConfigFile(filepath.Join("testdata", "my-postgres.conf")),
-		postgres.WithDatabase(dbName),
-		postgres.WithUsername(dbUser),
-		postgres.WithPassword(dbPassword),
-		testcontainers.WithWaitStrategy(
-			wait.ForLog("database system is ready to accept connections").
-				WithOccurrence(2).
-				WithStartupTimeout(5*time.Second)),
-	)
-	if err != nil {
-		log.Fatalf("failed to start container: %s", err)
-	}
-	dsn, err := postgresContainer.ConnectionString(ctx, "sslmode=disable")
-	if err != nil {
-		log.Fatalf("failed to start container: %s", err)
-	}
-	// Clean up the container
-	defer func() {
-		if err := postgresContainer.Terminate(ctx); err != nil {
-			log.Fatalf("failed to terminate container: %s", err)
+
+	_, ok := os.LookupEnv("CI")
+	if ok {
+		dbConnStr, err := goutils.GetConnection(config)
+		if err != nil {
+			panic(fmt.Errorf("failed to get connection: %v", err))
 		}
-	}()
+		dsn = *dbConnStr
+	} else {
+		dbName := config.GetString("DATABASE_DBNAME")
+		dbUser := config.GetString("DATABASE_USER")
+		dbPassword := config.GetString("DATABASE_PASSWORD")
+
+		postgresContainer, err := postgres.RunContainer(ctx,
+			testcontainers.WithImage("docker.io/postgres:16-alpine"),
+			postgres.WithInitScripts(filepath.Join("db", "init-e2e.sql")),
+			// postgres.WithConfigFile(filepath.Join("testdata", "my-postgres.conf")),
+			postgres.WithDatabase(dbName),
+			postgres.WithUsername(dbUser),
+			postgres.WithPassword(dbPassword),
+			testcontainers.WithWaitStrategy(
+				wait.ForLog("database system is ready to accept connections").
+					WithOccurrence(2).
+					WithStartupTimeout(5*time.Second)),
+		)
+		if err != nil {
+			log.Fatalf("failed to start container: %s", err)
+		}
+		dsn, err = postgresContainer.ConnectionString(ctx, "sslmode=disable")
+
+		if err != nil {
+			log.Fatalf("failed to start container: %s", err)
+		}
+		// Clean up the container
+		defer func() {
+			if err := postgresContainer.Terminate(ctx); err != nil {
+				log.Fatalf("failed to terminate container: %s", err)
+			}
+		}()
+	}
 
 	newDb, err := goutils.ConnectToDb(
 		dsn,
