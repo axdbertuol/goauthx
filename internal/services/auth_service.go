@@ -379,7 +379,7 @@ func (as *AuthService) RenewTokens(
 		return &gut.CustomError{
 			Code:         http.StatusNotFound,
 			Message:      err.Error(),
-			InternalCode: "user:NotFound:RenewTokens",
+			InternalCode: "userCredentials:NotFound:RenewTokens",
 		}
 	}
 
@@ -416,10 +416,11 @@ func (as *AuthService) GetAllUserIdentities(
 ) ([]dtos.UserCredentialsResponse, error) {
 	ucreds := []models.UserCredentials{}
 	if err := as.userCredRepo.GetAll(&ucreds, req); err != nil {
-		return nil, echo.NewHTTPError(
-			http.StatusInternalServerError,
-			gud.NewErrorResponse("failed to retrieve user profiles"),
-		)
+		return nil, &gut.CustomError{
+			Code:         http.StatusInternalServerError,
+			Message:      err.Error(),
+			InternalCode: ":UnknownError:GetAllUserIdentities",
+		}
 	}
 
 	mapFunc := func(user models.UserCredentials) dtos.UserCredentialsResponse {
@@ -434,18 +435,24 @@ func (as *AuthService) DeleteUserCredentials(userId uuid.UUID) error {
 
 	if err := as.userCredRepo.GetFirst(ucreds, "id = ?", userId); err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return echo.NewHTTPError(http.StatusNotFound, gud.NewErrorResponse("user not found"))
+			return &gut.CustomError{
+				Code:         http.StatusNotFound,
+				Message:      err.Error(),
+				InternalCode: "userCredentials:NotFound:DeleteUserCredentials",
+			}
 		}
-		return echo.NewHTTPError(
-			http.StatusInternalServerError,
-			gud.NewErrorResponse("failed to retrieve user"),
-		)
+		return &gut.CustomError{
+			Code:         http.StatusInternalServerError,
+			Message:      err.Error(),
+			InternalCode: "userCredentials:UnknownErr:DeleteUserCredentials",
+		}
 	}
 	if err := as.userCredRepo.Delete(ucreds, userId); err != nil {
-		return echo.NewHTTPError(
-			http.StatusInternalServerError,
-			gud.NewErrorResponse("failed to delete user profile"),
-		)
+		return &gut.CustomError{
+			Code:         http.StatusInternalServerError,
+			Message:      err.Error(),
+			InternalCode: ":UnknownFailure:DeleteUserCredentials",
+		}
 	}
 	return nil
 }
