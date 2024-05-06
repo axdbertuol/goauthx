@@ -5,12 +5,15 @@ package main_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/axdbertuol/goauthx/internal/dtos"
 	"github.com/axdbertuol/goauthx/internal/handlers"
@@ -24,6 +27,9 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/modules/postgres"
+	"github.com/testcontainers/testcontainers-go/wait"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
@@ -44,19 +50,44 @@ const (
 )
 
 func TestMain(m *testing.M) {
+	ctx := context.Background()
+
 	// Set up test database
 	config = viper.GetViper()
 	config.SetConfigFile("env-example")
 	config.SetConfigType("env")
 	config.ReadInConfig()
-
-	dsn, err := goutils.GetConnection(config)
+	dbName := config.GetString("DATABASE_DBNAME")
+	dbUser := config.GetString("DATABASE_USER")
+	dbPassword := config.GetString("DATABASE_PASSWORD")
+	postgresContainer, err := postgres.RunContainer(ctx,
+		testcontainers.WithImage("docker.io/postgres:16-alpine"),
+		postgres.WithInitScripts(filepath.Join("db", "init-e2e.sql")),
+		// postgres.WithConfigFile(filepath.Join("testdata", "my-postgres.conf")),
+		postgres.WithDatabase(dbName),
+		postgres.WithUsername(dbUser),
+		postgres.WithPassword(dbPassword),
+		testcontainers.WithWaitStrategy(
+			wait.ForLog("database system is ready to accept connections").
+				WithOccurrence(2).
+				WithStartupTimeout(5*time.Second)),
+	)
 	if err != nil {
-		log.Fatalf("failed to get dsn: %v", err)
+		log.Fatalf("failed to start container: %s", err)
 	}
+	dsn, err := postgresContainer.ConnectionString(ctx, "sslmode=disable")
+	if err != nil {
+		log.Fatalf("failed to start container: %s", err)
+	}
+	// Clean up the container
+	defer func() {
+		if err := postgresContainer.Terminate(ctx); err != nil {
+			log.Fatalf("failed to terminate container: %s", err)
+		}
+	}()
 
 	newDb, err := goutils.ConnectToDb(
-		*dsn,
+		dsn,
 		goutils.OpenDatabaseConnection,
 		0,
 		1,
@@ -340,5 +371,64 @@ func TestRefreshToken_E2E(t *testing.T) {
 
 		// Assert that the access token is not empty
 		assert.NotEmpty(t, refreshResponse.Token, "access token should not be empty")
+	})
+
+	// TestExpiredRefreshToken
+	t.Run("ExpiredRefreshToken", func(t *testing.T) {
+		reqBody, err := json.Marshal(dtos.RenewTokensDTO{RefreshToken: tokens.RefreshToken})
+		assert.NoError(t, err)
+		req, err := http.NewRequest(
+			"POST",
+			path+"/renew-tokens",
+			bytes.NewBuffer(reqBody),
+		)
+		req.Header.Set("Authorization", "Bearer "+tokens.Token)
+		req.Header.Set("Content-Type", "application/json")
+
+		if err != nil {
+			t.Fatalf("failed to create request: %v", err)
+		}
+
+		// Create a new HTTP recorder to record the response
+		rec := httptest.NewRecorder()
+
+		// Serve the request to the handler
+		e.ServeHTTP(rec, req)
+
+		// Check the response status code
+		if rec.Code != http.StatusOK {
+			t.Errorf("expected status code %d, got %d", http.StatusOK, rec.Code)
+		}
+
+		// Unmarshal the response body into a DTO
+		var refreshResponse dtos.TokenDTOResponse
+		err = json.Unmarshal(rec.Body.Bytes(), &refreshResponse)
+		if err != nil {
+			t.Fatalf("failed to unmarshal refresh token response body: %v", err)
+		}
+
+		// Assert that the access token is not empty
+		assert.NotEmpty(t, refreshResponse.Token, "access token should not be empty")
+	})
+
+	// TestInvalidRefreshToken
+	t.Run("InvalidRefreshToken", func(t *testing.T) {
+		// Prepare necessary data and context
+		// Call RenewTokens method
+		// Assert the expected behavior
+	})
+
+	// TestTokenGenerationFailure
+	t.Run("TokenGenerationFailure", func(t *testing.T) {
+		// Prepare necessary data and context
+		// Call RenewTokens method
+		// Assert the expected behavior
+	})
+
+	// TestUserNotFound
+	t.Run("UserNotFound", func(t *testing.T) {
+		// Prepare necessary data and context
+		// Call RenewTokens method
+		// Assert the expected behavior
 	})
 }

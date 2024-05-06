@@ -5,11 +5,6 @@ jobs:
   test-go:
     docker:
     - image: cimg/go:1.22
-    - image: axdr3/cci-pg-uuid:0.0.2
-      environment:
-        POSTGRES_USER: postgres
-        POSTGRES_DB: test-db
-        POSTGRES_PASSWORD: $POSTGRES_PASSWORD
     steps:
       - checkout
       - run:
