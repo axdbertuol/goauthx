@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"fmt"
 	"log"
 	"log/slog"
 
@@ -106,10 +105,8 @@ func (aeh *AuthEventHandler) handleUserUpdatedEvent(e kafka.Event) error {
 		return err
 	}
 
-	// use db
 	ucreds := new(models.UserCredentials)
 	ucreds.UserId = payload.UserId
-	aeh.logger.Info(fmt.Sprintf("%+v", ucreds))
 	if err := aeh.authService.UpdateUserCredentials(ucreds, (*dtos.UpdateUserCredentialsDTO)(payload)); err != nil {
 		aeh.logger.Error("error creating user for event %v", e.Type, err)
 		return err

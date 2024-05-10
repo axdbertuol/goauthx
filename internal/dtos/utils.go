@@ -1,6 +1,7 @@
 package dtos
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/axdbertuol/goauthx/internal/constants"
@@ -17,10 +18,10 @@ func BindAndValidate(dto interface{}, c echo.Context) error {
 			InternalCode: constants.BIND_FAILED,
 		}
 	}
-
+	log.Println("asfdas", dto)
 	if err := c.Validate(dto); err != nil {
 		return &gut.CustomError{
-			Code:         http.StatusUnauthorized,
+			Code:         http.StatusBadRequest,
 			Message:      err.Error(),
 			InternalCode: constants.FIELD_VALIDATION_ERR,
 		}

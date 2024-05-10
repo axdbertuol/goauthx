@@ -44,7 +44,7 @@ func (ah *AuthHandler) RegisterAuthRoutes(
 
 	e.GET("/user-credentials", ah.GetAllUserIdentities)
 	e.GET("/user-credentials/:id", ah.GetUserCredentialsByID)
-	e.POST("/user-credentials", ah.CreateUserCredentials)
+	e.POST("/register-credentials", ah.CreateUserCredentials)
 	e.PATCH("/user-credentials/:id", ah.UpdateUserCredentials)
 	e.DELETE("/user-credentials/:id", ah.DeleteUserCredentials)
 
@@ -205,7 +205,7 @@ func (h *AuthHandler) RenewTokens(c echo.Context) error {
 // @Failure 500 {object} gud.ErrorResponse
 // @Router /user/profile/{id} [get]
 func (h *AuthHandler) GetUserCredentialsByID(c echo.Context) error {
-	dto := new(dtos.UserCredentialsResponse)
+	dto := new(dtos.GetUserCredentialsDTO)
 	ucreds := new(models.UserCredentials)
 
 	userProfID, err := uuid.Parse(c.Param("user_id"))
@@ -216,8 +216,7 @@ func (h *AuthHandler) GetUserCredentialsByID(c echo.Context) error {
 			InternalCode: "userId:Invalid:GetUserCredentialsByID",
 		}
 	}
-	dto.UserId = userProfID
-	if err := h.authService.GetUserCredentialsByID(ucreds, dto); err != nil {
+	if err := h.authService.GetUserCredentialsByID(ucreds, userProfID); err != nil {
 		return err
 	}
 

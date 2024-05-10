@@ -41,6 +41,15 @@ type CreateUserCredentialsDTO struct {
 	SocialId     string    `json:"socialId,omitempty"     validate:"omitempty,required_without=PasswordHash"`
 }
 
+type GetUserCredentialsDTO struct {
+	UserId   uuid.UUID `json:"userId"             validate:"required"`
+	Username string    `json:"username"           validate:"required"`
+	Email    string    `json:"email"              validate:"required,email"`
+	Status   string    `json:"status"             validate:"required"`
+	Role     string    `json:"role"               validate:"required"`
+	SocialId string    `json:"socialId,omitempty" validate:"omitempty,required_without=PasswordHash"`
+}
+
 func (u *CreateUserCredentialsDTO) BindAndValidate(c echo.Context) error {
 	return BindAndValidate(u, c)
 }

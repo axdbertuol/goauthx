@@ -39,7 +39,7 @@ type AuthServicer interface {
 	) error
 	GetUserCredentialsByID(
 		ucreds *models.UserCredentials,
-		dto *dtos.UserCredentialsResponse,
+		string uuid.UUID,
 	) error
 	DeleteUserCredentials(userId uuid.UUID) error
 	SignInWithGoogle(
@@ -392,9 +392,9 @@ func (as *AuthService) RenewTokens(
 }
 func (as *AuthService) GetUserCredentialsByID(
 	ucreds *models.UserCredentials,
-	dto *dtos.UserCredentialsResponse,
+	userId uuid.UUID,
 ) error {
-	if err := as.userCredRepo.GetById(ucreds, dto.UserId); err != nil {
+	if err := as.userCredRepo.GetById(ucreds, userId); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return &gut.CustomError{
 				Code:         http.StatusNotFound,
