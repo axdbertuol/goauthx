@@ -1,3 +1,6 @@
+//go:build e2e_tests
+// +build e2e_tests
+
 package testhelpers
 
 import (
@@ -37,7 +40,6 @@ func (esc *E2ESuitCase) InitE2E(m *testing.M) {
 		ctx    = esc.Ctx
 		e      = echo.New()
 	)
-	esc.Echo = e
 	_, ok := os.LookupEnv("CI")
 	if ok {
 		dbConnStr, err := goutils.GetConnection(config)
@@ -94,6 +96,7 @@ func (esc *E2ESuitCase) InitE2E(m *testing.M) {
 	handlers.
 		NewAuthHandler(authService).
 		RegisterAuthRoutes(versionGroup, internal_middleware.BearerAuthMiddleware)
+	esc.Echo = e
 
 	go func() {
 		// Start your Echo server

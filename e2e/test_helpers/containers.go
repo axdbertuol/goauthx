@@ -1,3 +1,6 @@
+//go:build e2e_tests
+// +build e2e_tests
+
 package testhelpers
 
 import (
@@ -38,7 +41,7 @@ func NewPgContainer(config *viper.Viper, scriptPath string) *PgContainer {
 		dbName:     dbName,
 		dbUser:     dbUser,
 		dbPassword: dbPassword,
-		scriptPath: dir + "/../db/init-e2e.sql",
+		scriptPath: dir + "/../../db/init-e2e.sql",
 	}
 }
 

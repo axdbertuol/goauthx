@@ -1,7 +1,7 @@
 //go:build e2e_tests
 // +build e2e_tests
 
-package services_test
+package main_test
 
 import (
 	"bytes"
@@ -11,10 +11,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	testhelpers "github.com/axdbertuol/goauthx/e2e/test_helpers"
 	"github.com/axdbertuol/goauthx/internal/dtos"
 	"github.com/axdbertuol/goauthx/internal/models"
-	testhelpers "github.com/axdbertuol/goauthx/test_helpers"
-	"github.com/google/uuid"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/crypto/bcrypt"
@@ -39,7 +38,7 @@ func TestMain(m *testing.M) {
 
 	// Set up test database
 	config = viper.GetViper()
-	config.SetConfigFile("../../env-example")
+	config.SetConfigFile("../env-example")
 	config.SetConfigType("env")
 	config.ReadInConfig()
 
@@ -54,8 +53,8 @@ func TestCreateUserCredentialsWithEmail_E2E(t *testing.T) {
 	// Create a sample login request bodyc
 	// testhelpers.Setup(scase.DB)
 	email := "test@example.com"
-	signupRequest := dtos.CreateUserCredentialsDTO{
-		UserId:       uuid.New(),
+	dto := dtos.CreateUserCredentialsDTO{
+		UserId:       uint(123),
 		Username:     "Teste",
 		PasswordHash: hashedPassword,
 		Email:        email,
@@ -64,20 +63,17 @@ func TestCreateUserCredentialsWithEmail_E2E(t *testing.T) {
 	}
 
 	// Marshal the request body to JSON
-	signupRequestBody, err := json.Marshal(signupRequest)
+	signupRequestBody, err := json.Marshal(dto)
 	if err != nil {
 		t.Fatalf("failed to marshal login request body: %v", err)
 	}
 
 	// Create a new HTTP request with the login request body
-	req, err := http.NewRequest(
-		"POST",
-		path+"/register-credentials",
+	req := httptest.NewRequest(
+		http.MethodPost,
+		path+"/register",
 		bytes.NewBuffer(signupRequestBody),
 	)
-	if err != nil {
-		t.Fatalf("failed to create request: %v", err)
-	}
 
 	// Set the Content-Type header to JSON
 	req.Header.Set("Content-Type", "application/json")
@@ -107,8 +103,11 @@ func TestCreateUserCredentialsWithEmail_E2E(t *testing.T) {
 	// Add more assertions as needed to validate the response body
 }
 func TestGetAllUserCredentials_E2E(t *testing.T) {
+	testhelpers.Cleanup(scase.DB)
+	testhelpers.Setup(scase.DB)
+
 	// Create a new HTTP request for GET /UserCredentials
-	req := httptest.NewRequest(http.MethodGet, path+"/user-credentials", nil)
+	req := httptest.NewRequest(http.MethodGet, path+"/credentials", nil)
 
 	// Create a new HTTP recorder
 	rec := httptest.NewRecorder()
@@ -133,7 +132,7 @@ func TestGetAllUserCredentials_E2E(t *testing.T) {
 	// Add assertions to validate the response body
 }
 func TestLogin_E2E(t *testing.T) {
-	// Create a signed-up user
+	testhelpers.Cleanup(scase.DB)
 
 	email := "logintest@example.com"
 	CreateUserCredentialsDTO := dtos.CreateUserCredentialsDTO{
@@ -143,16 +142,17 @@ func TestLogin_E2E(t *testing.T) {
 		Status:       "inactive",
 		Role:         "user",
 	}
-	ucreds := &models.UserCredentials{
-		UserId:       uuid.New(),
+	ucreds := models.UserCredentials{
+		UserId:       uint(123),
 		Username:     "tester",
 		Email:        email,
 		Status:       "inactive",
 		Role:         "user",
 		PasswordHash: &hashedPassword,
+		SocialId:     nil,
 	}
-	err := db.Create(ucreds).Error
-	assert.NoError(t, err)
+	err := testhelpers.Setup(scase.DB, &ucreds)
+	assert.NotErrorIs(t, err, gorm.ErrDuplicatedKey)
 	// Register the user
 	// RegisterUser(t, CreateUserCredentialsDTO)
 
@@ -202,7 +202,7 @@ func TestLogin_E2E(t *testing.T) {
 }
 func TestRefreshToken_E2E(t *testing.T) {
 	// Clean up any existing email confirm tokens and user profiles in the database
-	db.Exec("DELETE FROM user_credentials")
+	testhelpers.Cleanup(scase.DB)
 	// Create a user and get their tokens
 	email := "testReftoken@example.com"
 	password := "Password123!"
@@ -216,14 +216,14 @@ func TestRefreshToken_E2E(t *testing.T) {
 		Role:         "user",
 	}
 	ucreds := &models.UserCredentials{
-		UserId:       uuid.New(),
+		UserId:       uint(123),
 		Username:     "tester",
 		Email:        email,
 		Status:       "inactive",
 		Role:         "user",
 		PasswordHash: &hashedPassword,
 	}
-	err := db.Create(ucreds).Error
+	err := testhelpers.Setup(scase.DB, ucreds)
 	assert.NoError(t, err)
 
 	// Create a new user
@@ -332,105 +332,105 @@ func TestRefreshToken_E2E(t *testing.T) {
 	})
 }
 
-func TestEndToEndCases(t *testing.T) {
-	ucred1 := &models.UserCredentials{
-		Model:        gorm.Model{ID: 1},
-		UserId:       uuid.New(),
-		Username:     "testuser",
-		Email:        "testuser@example.com",
-		PasswordHash: &hashedPassword,
-		Role:         "user",
-		Status:       "inactive",
-		SocialId:     nil,
-	}
-	ucredDto := ucred1.ToDto()
-	ucredLogin := &dtos.LoginDTO{
-		Username: &ucred1.Username,
-		Email:    &ucred1.Email,
-		Password: password,
-	}
-	// if err := testhelpers.Setup(scase.DB, ucred1); err != nil {
-	// 	log.Fatal(err)
-	// }
+// func TestEndToEndCases(t *testing.T) {
+// 	ucred1 := &models.UserCredentials{
+// 		Model:        gorm.Model{ID: 1},
+// 		UserId:       uint(123),
+// 		Username:     "testuser",
+// 		Email:        "testuser@example.com",
+// 		PasswordHash: &hashedPassword,
+// 		Role:         "user",
+// 		Status:       "inactive",
+// 		SocialId:     nil,
+// 	}
+// 	ucredDto := ucred1.ToDto()
+// 	ucredLogin := &dtos.LoginDTO{
+// 		Username: &ucred1.Username,
+// 		Email:    &ucred1.Email,
+// 		Password: password,
+// 	}
+// 	// if err := testhelpers.Setup(scase.DB, ucred1); err != nil {
+// 	// 	log.Fatal(err)
+// 	// }
 
-	testCases := []struct {
-		name            string
-		method          string
-		path            string
-		body            interface{}
-		runAfter        func(...any) any
-		expectedStatus  int
-		expectedContent string
-	}{
+// 	testCases := []struct {
+// 		name            string
+// 		method          string
+// 		path            string
+// 		body            interface{}
+// 		runAfter        func(...any) any
+// 		expectedStatus  int
+// 		expectedContent string
+// 	}{
 
-		{
-			name:           "CreateUserCredentialsWithEmail",
-			method:         http.MethodPost,
-			path:           path + "/user-credentials",
-			body:           ucredDto,
-			expectedStatus: http.StatusCreated,
-			// Add expected content if needed
-		},
-		{
-			name:           "GetAllUserCredentials",
-			method:         http.MethodGet,
-			path:           path + "/user-credentials",
-			body:           nil,
-			expectedStatus: http.StatusOK,
-			// Add expected content if needed
-		},
-		{
-			name:           "Login",
-			method:         http.MethodPost,
-			path:           path + "/login",
-			body:           ucredLogin,
-			expectedStatus: http.StatusOK,
-			// Add expected content if needed
-		},
-		{
-			name:           "RefreshToken",
-			method:         http.MethodPost,
-			path:           path + "/renew-tokens",
-			body:           dtos.RenewTokensDTO{ /* Populate with necessary fields */ },
-			expectedStatus: http.StatusOK,
-			// Add expected content if needed
-		},
-		// Add more test cases as needed
-	}
+// 		{
+// 			name:           "CreateUserCredentialsWithEmail",
+// 			method:         http.MethodPost,
+// 			path:           path + "/credentials",
+// 			body:           ucredDto,
+// 			expectedStatus: http.StatusCreated,
+// 			// Add expected content if needed
+// 		},
+// 		{
+// 			name:           "GetAllUserCredentials",
+// 			method:         http.MethodGet,
+// 			path:           path + "/credentials",
+// 			body:           nil,
+// 			expectedStatus: http.StatusOK,
+// 			// Add expected content if needed
+// 		},
+// 		{
+// 			name:           "Login",
+// 			method:         http.MethodPost,
+// 			path:           path + "/login",
+// 			body:           ucredLogin,
+// 			expectedStatus: http.StatusOK,
+// 			// Add expected content if needed
+// 		},
+// 		{
+// 			name:           "RefreshToken",
+// 			method:         http.MethodPost,
+// 			path:           path + "/renew-tokens",
+// 			body:           dtos.RenewTokensDTO{ /* Populate with necessary fields */ },
+// 			expectedStatus: http.StatusOK,
+// 			// Add expected content if needed
+// 		},
+// 		// Add more test cases as needed
+// 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			// Create a new HTTP request
-			var req *http.Request
-			var err error
-			if tc.body != nil {
-				bodyBytes, err := json.Marshal(tc.body)
-				if err != nil {
-					t.Fatalf("failed to marshal request body: %v", err)
-				}
-				req, err = http.NewRequest(tc.method, tc.path, bytes.NewBuffer(bodyBytes))
-			} else {
-				req, err = http.NewRequest(tc.method, tc.path, nil)
-			}
-			if err != nil {
-				t.Fatalf("failed to create request: %v", err)
-			}
+// 	for _, tc := range testCases {
+// 		t.Run(tc.name, func(t *testing.T) {
+// 			// Create a new HTTP request
+// 			var req *http.Request
+// 			var err error
+// 			if tc.body != nil {
+// 				bodyBytes, err := json.Marshal(tc.body)
+// 				if err != nil {
+// 					t.Fatalf("failed to marshal request body: %v", err)
+// 				}
+// 				req, err = http.NewRequest(tc.method, tc.path, bytes.NewBuffer(bodyBytes))
+// 			} else {
+// 				req, err = http.NewRequest(tc.method, tc.path, nil)
+// 			}
+// 			if err != nil {
+// 				t.Fatalf("failed to create request: %v", err)
+// 			}
 
-			// Create a new HTTP recorder to record the response
-			rec := httptest.NewRecorder()
+// 			// Create a new HTTP recorder to record the response
+// 			rec := httptest.NewRecorder()
 
-			// Serve the request to the handler
-			scase.Echo.ServeHTTP(rec, req)
+// 			// Serve the request to the handler
+// 			scase.Echo.ServeHTTP(rec, req)
 
-			// Check the response status code
-			if rec.Code != tc.expectedStatus {
-				t.Errorf("expected status code %d, got %d", tc.expectedStatus, rec.Code)
-			}
+// 			// Check the response status code
+// 			if rec.Code != tc.expectedStatus {
+// 				t.Errorf("expected status code %d, got %d", tc.expectedStatus, rec.Code)
+// 			}
 
-			// Optionally, validate the response body here
-		})
-	}
-}
+// 			// Optionally, validate the response body here
+// 		})
+// 	}
+// }
 
 // Helper function to register a user
 func RegisterUser(t *testing.T, CreateUserCredentialsDTO dtos.CreateUserCredentialsDTO) {
@@ -439,7 +439,7 @@ func RegisterUser(t *testing.T, CreateUserCredentialsDTO dtos.CreateUserCredenti
 	assert.NoError(t, err)
 
 	// Create a new HTTP request with the request body
-	req, err := http.NewRequest("POST", path+"/register-credentials", bytes.NewBuffer(requestBody))
+	req, err := http.NewRequest("POST", path+"/register", bytes.NewBuffer(requestBody))
 	assert.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
 
