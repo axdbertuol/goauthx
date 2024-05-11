@@ -7,13 +7,24 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
-	testhelpers "github.com/axdbertuol/goauthx/e2e/test_helpers"
 	"github.com/axdbertuol/goauthx/internal/dtos"
+	"github.com/axdbertuol/goauthx/internal/handlers"
+	internal_middleware "github.com/axdbertuol/goauthx/internal/middleware"
+	gum "github.com/axdbertuol/goutils/middleware"
+	testhelpers "github.com/axdbertuol/goutils/test_helpers"
+
 	"github.com/axdbertuol/goauthx/internal/models"
+	"github.com/axdbertuol/goauthx/internal/repository"
+	"github.com/axdbertuol/goauthx/internal/services"
+	"github.com/axdbertuol/goauthx/internal/utils"
+	"github.com/go-playground/validator/v10"
+	"github.com/labstack/echo/v4"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/crypto/bcrypt"
@@ -32,10 +43,55 @@ const (
 	path = "/api/v1"
 )
 
+func MustInitEcho(m *testing.M, e *echo.Echo) {
+
+	// Middleware
+	validator := validator.New()
+
+	validator.RegisterValidation("password", internal_middleware.ValidatePassword)
+	e.Validator = &gum.DefaultValidator{Validator: validator}
+	// e.Use(middleware.Logger())
+	// e.Use(middleware.Recover())
+	e.Use(gum.ErrorMiddleware)
+
+	// Start repository
+	userCredRepo := repository.NewUserCredentialsRepository(scase.DB)
+
+	versionGroup := utils.CreateVersionedApiPath(e, "v1")
+
+	// Start services
+	authService := services.NewAuthService(userCredRepo, config)
+
+	// Initialize your handlers
+	handlers.
+		NewAuthHandler(authService).
+		RegisterAuthRoutes(versionGroup, internal_middleware.BearerAuthMiddleware)
+	go func() {
+		// Start your Echo server
+		if err := e.Start(":13333"); err != nil {
+			log.Fatalf("failed to start server: %v", err)
+		}
+	}()
+	defer e.Close()
+	exitVal := m.Run()
+
+	// Clean up test data if needed
+	scase.Cleanup("user_credentials")
+	os.Exit(exitVal)
+
+}
+
+var (
+	e          *echo.Echo
+	modelsList = []interface{}{
+		&models.UserCredentials{},
+	}
+)
+
 func TestMain(m *testing.M) {
 
 	ctx := context.Background()
-
+	e = echo.New()
 	// Set up test database
 	config = viper.GetViper()
 	config.SetConfigFile("../env-example")
@@ -43,15 +99,25 @@ func TestMain(m *testing.M) {
 	config.ReadInConfig()
 
 	scase = &testhelpers.E2ESuitCase{
-		Ctx:    ctx,
-		Config: config,
+		Ctx:        ctx,
+		Config:     config,
+		ScriptPath: "./init-e2e.sql",
 	}
-	scase.InitE2E(m)
+	scase.MustInitEnvironment()
+	defer func() {
+		if err := scase.PgContainer.Terminate(ctx); err != nil {
+			log.Fatalf("failed to terminate container: %s", err)
+		}
+	}()
+	scase.Setup(modelsList...)
+	MustInitEcho(m, e)
+
 }
 
 func TestCreateUserCredentialsWithEmail_E2E(t *testing.T) {
 	// Create a sample login request bodyc
-	// testhelpers.Setup(scase.DB)
+	scase.Cleanup(modelsList...)
+	scase.Setup(modelsList...)
 	email := "test@example.com"
 	dto := dtos.CreateUserCredentialsDTO{
 		UserId:       uint(123),
@@ -82,7 +148,7 @@ func TestCreateUserCredentialsWithEmail_E2E(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	// Serve the request to the handler
-	scase.Echo.ServeHTTP(rec, req)
+	e.ServeHTTP(rec, req)
 
 	// Check the response status code
 	if rec.Code != http.StatusCreated {
@@ -103,8 +169,8 @@ func TestCreateUserCredentialsWithEmail_E2E(t *testing.T) {
 	// Add more assertions as needed to validate the response body
 }
 func TestGetAllUserCredentials_E2E(t *testing.T) {
-	testhelpers.Cleanup(scase.DB)
-	testhelpers.Setup(scase.DB)
+	scase.Cleanup(modelsList...)
+	scase.Setup(modelsList...)
 
 	// Create a new HTTP request for GET /UserCredentials
 	req := httptest.NewRequest(http.MethodGet, path+"/credentials", nil)
@@ -112,7 +178,7 @@ func TestGetAllUserCredentials_E2E(t *testing.T) {
 	// Create a new HTTP recorder
 	rec := httptest.NewRecorder()
 
-	scase.Echo.ServeHTTP(rec, req)
+	e.ServeHTTP(rec, req)
 
 	// Check the response status code
 	if rec.Code != http.StatusOK {
@@ -132,7 +198,8 @@ func TestGetAllUserCredentials_E2E(t *testing.T) {
 	// Add assertions to validate the response body
 }
 func TestLogin_E2E(t *testing.T) {
-	testhelpers.Cleanup(scase.DB)
+	scase.Cleanup(modelsList...)
+	scase.Setup(modelsList...)
 
 	email := "logintest@example.com"
 	CreateUserCredentialsDTO := dtos.CreateUserCredentialsDTO{
@@ -151,7 +218,7 @@ func TestLogin_E2E(t *testing.T) {
 		PasswordHash: &hashedPassword,
 		SocialId:     nil,
 	}
-	err := testhelpers.Setup(scase.DB, &ucreds)
+	err := scase.CreateEntities(&ucreds)
 	assert.NotErrorIs(t, err, gorm.ErrDuplicatedKey)
 	// Register the user
 	// RegisterUser(t, CreateUserCredentialsDTO)
@@ -185,7 +252,7 @@ func TestLogin_E2E(t *testing.T) {
 		rec := httptest.NewRecorder()
 
 		// Serve the request to the handler
-		scase.Echo.ServeHTTP(rec, req)
+		e.ServeHTTP(rec, req)
 
 		// Check the response status code
 		assert.Equal(
@@ -201,14 +268,17 @@ func TestLogin_E2E(t *testing.T) {
 	// Add more subtests as needed
 }
 func TestRefreshToken_E2E(t *testing.T) {
+
 	// Clean up any existing email confirm tokens and user profiles in the database
-	testhelpers.Cleanup(scase.DB)
+	scase.Cleanup(modelsList...)
+	scase.Setup(modelsList...)
+
 	// Create a user and get their tokens
 	email := "testReftoken@example.com"
 	password := "Password123!"
 	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(password), 1)
 
-	CreateUserCredentialsDTO := dtos.CreateUserCredentialsDTO{
+	createUserCredentialsDTO := dtos.CreateUserCredentialsDTO{
 		Username:     "tester",
 		Email:        email,
 		PasswordHash: hashedPassword,
@@ -223,14 +293,14 @@ func TestRefreshToken_E2E(t *testing.T) {
 		Role:         "user",
 		PasswordHash: &hashedPassword,
 	}
-	err := testhelpers.Setup(scase.DB, ucreds)
+	err := scase.CreateEntities(ucreds)
 	assert.NoError(t, err)
 
 	// Create a new user
 	// RegisterUser(t, CreateUserCredentialsDTO)
 	// Login and get tokens
 	tokens := LoginAndAssert(t, dtos.LoginDTO{
-		Username: &CreateUserCredentialsDTO.Username,
+		Username: &createUserCredentialsDTO.Username,
 		Password: password,
 	})
 
@@ -254,7 +324,7 @@ func TestRefreshToken_E2E(t *testing.T) {
 		rec := httptest.NewRecorder()
 
 		// Serve the request to the handler
-		scase.Echo.ServeHTTP(rec, req)
+		e.ServeHTTP(rec, req)
 
 		// Check the response status code
 		if rec.Code != http.StatusOK {
@@ -292,7 +362,7 @@ func TestRefreshToken_E2E(t *testing.T) {
 		rec := httptest.NewRecorder()
 
 		// Serve the request to the handler
-		scase.Echo.ServeHTTP(rec, req)
+		e.ServeHTTP(rec, req)
 
 		// Check the response status code
 		if rec.Code != http.StatusOK {
@@ -420,7 +490,7 @@ func TestRefreshToken_E2E(t *testing.T) {
 // 			rec := httptest.NewRecorder()
 
 // 			// Serve the request to the handler
-// 			scase.Echo.ServeHTTP(rec, req)
+// 			e.ServeHTTP(rec, req)
 
 // 			// Check the response status code
 // 			if rec.Code != tc.expectedStatus {
@@ -447,7 +517,7 @@ func RegisterUser(t *testing.T, CreateUserCredentialsDTO dtos.CreateUserCredenti
 	rec := httptest.NewRecorder()
 
 	// Serve the request to the handler
-	scase.Echo.ServeHTTP(rec, req)
+	e.ServeHTTP(rec, req)
 
 	// Check the response status code
 	assert.Equal(
@@ -473,7 +543,7 @@ func LoginAndAssert(t *testing.T, loginDTO dtos.LoginDTO) dtos.TokenDTOResponse 
 	rec := httptest.NewRecorder()
 
 	// Serve the request to the handler
-	scase.Echo.ServeHTTP(rec, req)
+	e.ServeHTTP(rec, req)
 
 	// Check the response status code
 	assert.Equal(t, http.StatusOK, rec.Code, "expected status code 200 for successful login")
