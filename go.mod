@@ -11,8 +11,6 @@ require (
 	github.com/spf13/viper v1.18.2
 	github.com/swaggo/echo-swagger v1.4.1
 	github.com/swaggo/swag v1.16.3
-	github.com/testcontainers/testcontainers-go v0.30.0
-	github.com/testcontainers/testcontainers-go/modules/postgres v0.30.0
 	google.golang.org/api v0.172.0
 	gorm.io/gorm v1.25.9
 )
@@ -28,7 +26,7 @@ require (
 	github.com/Microsoft/go-winio v0.6.1 // indirect
 	github.com/Microsoft/hcsshim v0.11.4 // indirect
 	github.com/cenkalti/backoff/v4 v4.2.1 // indirect
-	github.com/containerd/containerd v1.7.12 // indirect
+	github.com/containerd/containerd v1.7.15 // indirect
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/cpuguy83/dockercfg v0.3.1 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
@@ -80,6 +78,8 @@ require (
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/swaggo/files/v2 v2.0.0 // indirect
+	github.com/testcontainers/testcontainers-go v0.31.0 // indirect
+	github.com/testcontainers/testcontainers-go/modules/postgres v0.31.0 // indirect
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect
 	github.com/yusufpapurcu/wmi v1.2.3 // indirect
@@ -141,3 +141,5 @@ require (
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace github.com/axdbertuol/goutils => ../go_common
