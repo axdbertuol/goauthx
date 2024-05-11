@@ -2,8 +2,8 @@ package handlers
 
 import (
 	"net/http"
+	"strconv"
 
-	gud "github.com/axdbertuol/goutils/dtos"
 	gut "github.com/axdbertuol/goutils/types"
 	"github.com/google/uuid"
 
@@ -41,27 +41,15 @@ func (ah *AuthHandler) RegisterAuthRoutes(
 	e.POST("/login", ah.Login)
 	e.POST("/google/login", ah.SignInWithGoogle)
 	e.POST("/renew-tokens", ah.RenewTokens, bearerMw)
+	e.POST("/register", ah.CreateUserCredentials)
 
-	e.GET("/user-credentials", ah.GetAllUserIdentities)
-	e.GET("/user-credentials/:id", ah.GetUserCredentialsByID)
-	e.POST("/register-credentials", ah.CreateUserCredentials)
-	e.PATCH("/user-credentials/:id", ah.UpdateUserCredentials)
-	e.DELETE("/user-credentials/:id", ah.DeleteUserCredentials)
+	e.GET("/credentials", ah.GetAllUserCredentials)
+	e.GET("/credentials/:id", ah.GetUserCredentialsByID)
+	e.PATCH("/credentials/:id", ah.UpdateUserCredentials)
+	e.DELETE("/credentials/:id", ah.DeleteUserCredentials)
 
 }
 
-// SignUp handles user registration.
-// @Summary Register a new user
-// @Description Register a new user with the provided details
-// @Tags Auth
-// @Accept json
-// @Produce json
-// @Param body body dtos.CreateUserCredentialsDTO true "User registration details"
-// @Success 201 {string} string "User created successfully"
-// @Failure 400 {object} gud.ErrorResponse "Invalid request payload"
-// @Failure 409 {object} gud.ErrorResponse "Username or email already exists"
-// @Failure 500 {object} gud.ErrorResponse "Failed to create user"
-// @Router /auth/signup [post]
 func (h *AuthHandler) CreateUserCredentials(c echo.Context) error {
 	// Parse request body
 	// Validate DTO
@@ -78,21 +66,6 @@ func (h *AuthHandler) CreateUserCredentials(c echo.Context) error {
 	return c.JSON(http.StatusCreated, ucreds.ToDto())
 }
 
-// SignInWithGoogle handles the sign-in with Google functionality.
-// This endpoint receives a Google ID token, validates it, and creates or retrieves a user profile accordingly.
-// If the user is successfully authenticated, it generates and returns access and refresh tokens.
-// @Summary Sign in with Google
-// @Tags Auth
-// @Description Handles the sign-in with Google functionality.
-// @Accept json
-// @Produce json
-// @Param idToken formData string true "Google ID token"
-// @Success 200 {object} dtos.TokenDTOResponse "Successful sign-in"
-// @Failure 400 {object} gud.ErrorResponse "Bad request"
-// @Failure 401 {object} gud.ErrorResponse "Unauthorized"
-// @Failure 404 {object} gud.ErrorResponse "Not found"
-// @Failure 500 {object} gud.ErrorResponse "Internal server error"
-// @Router /auth/google [post]
 func (h *AuthHandler) SignInWithGoogle(c echo.Context) error {
 	var (
 		signUpDTO = new(dtos.LoginGoogleDTO)
@@ -109,18 +82,6 @@ func (h *AuthHandler) SignInWithGoogle(c echo.Context) error {
 	return c.JSON(http.StatusOK, tokenResp)
 }
 
-// Login handles user login.
-// @Summary User login
-// @Description Authenticate user with provided credentials and issue a JWT token
-// @Tags Auth
-// @Accept json
-// @Produce json
-// @Param body body dtos.LoginDTO true "User login details"
-// @Success 200 {object} dtos.TokenDTOResponse "JWT token"
-// @Failure 400 {object} gud.ErrorResponse "Invalid request payload"
-// @Failure 401 {object} gud.ErrorResponse "Invalid username or password"
-// @Failure 500 {object} gud.ErrorResponse "Failed to generate token"
-// @Router /auth/login [post]
 func (h *AuthHandler) Login(c echo.Context) error {
 	// Parse request body
 	loginDTO := new(dtos.LoginDTO)
@@ -136,18 +97,6 @@ func (h *AuthHandler) Login(c echo.Context) error {
 	return c.JSON(http.StatusOK, tokenResp)
 }
 
-// RenewTokens refreshes the JWT token.
-// @Summary Refresh JWT token
-// @Description Refresh JWT token if it's within 30 minutes of expiration
-// @Tags Auth
-// @Accept json
-// @Produce json
-// @Param Authorization header string true "JWT token"
-// @Success 200 {object} dtos.TokenDTOResponse "New JWT token"
-// @Failure 400 {object} gud.ErrorResponse "Invalid token"
-// @Failure 401 {object} gud.ErrorResponse "Token can't be refreshed yet"
-// @Failure 500 {object} gud.ErrorResponse "Failed to generate new token"
-// @Router /auth/renew-tokens [post]
 func (h *AuthHandler) RenewTokens(c echo.Context) error {
 
 	dto := &dtos.RenewTokensDTO{}
@@ -194,16 +143,6 @@ func (h *AuthHandler) RenewTokens(c echo.Context) error {
 	return c.JSON(http.StatusOK, tokenResp)
 }
 
-// GetUserCredentialsByID handles the request to retrieve a user profile by ID.
-// @Summary Get a user profile by ID
-// @Description Retrieve a user profile by its ID
-// @ID get-user-profile-by-id
-// @Param id path uuid.UUID true "User Profile ID"
-// @Produce json
-// @Success 200 {object} models.UserCredentials
-// @Failure 404 {object} gud.ErrorResponse
-// @Failure 500 {object} gud.ErrorResponse
-// @Router /user/profile/{id} [get]
 func (h *AuthHandler) GetUserCredentialsByID(c echo.Context) error {
 	dto := new(dtos.GetUserCredentialsDTO)
 	ucreds := new(models.UserCredentials)
@@ -223,25 +162,12 @@ func (h *AuthHandler) GetUserCredentialsByID(c echo.Context) error {
 	return c.JSON(http.StatusOK, dto)
 }
 
-// UpdateUserCredentials handles the request to update a user profile.
-// @Summary Update a user profile
-// @Description Update an existing user profile
-// @ID update-user-profile
-// @Param id path string true "User Profile ID"
-// @Accept json
-// @Produce json
-// @Param user body models.UserCredentials true "User Profile object"
-// @Success 200 {object} dtos.UserCredentialsResponse
-// @Failure 400 {object} gud.ErrorResponse
-// @Failure 404 {object} gud.ErrorResponse
-// @Failure 500 {object} gud.ErrorResponse
-// @Router /user/profile/{id} [put]
 func (h *AuthHandler) UpdateUserCredentials(c echo.Context) error {
 	ucreds := new(models.UserCredentials)
 	dto := new(dtos.UpdateUserCredentialsDTO)
 
 	id := c.Param("user_id")
-	userId, err := uuid.Parse(id)
+	userId, err := strconv.ParseUint(id, 10, 64)
 	if err != nil {
 		return &gut.CustomError{
 			Code:         http.StatusBadRequest,
@@ -259,7 +185,7 @@ func (h *AuthHandler) UpdateUserCredentials(c echo.Context) error {
 		}
 	}
 
-	dto.UserId = userId
+	dto.UserId = uint(userId)
 
 	// Validate the user struct
 	if err := c.Validate(&dto); err != nil {
@@ -277,16 +203,9 @@ func (h *AuthHandler) UpdateUserCredentials(c echo.Context) error {
 	return c.JSON(http.StatusOK, dto)
 }
 
-// GetAllUserCredentialss handles the request to retrieve all user profiles.
-// @Summary Get all user profiles
-// @Description Retrieve all user profiles
-// @Produce json
-// @Success 200 {array} models.UserCredentials
-// @Failure 500 {object} gud.ErrorResponse
-// @Router /user/profile [get]
-func (h *AuthHandler) GetAllUserIdentities(c echo.Context) error {
+func (h *AuthHandler) GetAllUserCredentials(c echo.Context) error {
 
-	ucreds, err := h.authService.GetAllUserIdentities(c.Request())
+	ucreds, err := h.authService.GetAllUserCredentials(c.Request())
 	if err != nil {
 		return err
 	}
@@ -294,26 +213,17 @@ func (h *AuthHandler) GetAllUserIdentities(c echo.Context) error {
 	return c.JSON(http.StatusOK, ucreds)
 }
 
-// DeleteUserCredentials handles the request to delete a user profile.
-// @Summary Delete a user profile
-// @Description Delete a user profile by its ID
-// @ID delete-user-profile
-// @Param id path string true "User Profile ID"
-// @Success 204
-// @Failure 404 {object} gud.ErrorResponse
-// @Failure 500 {object} gud.ErrorResponse
-// @Router /user/profile/{id} [delete]
 func (h *AuthHandler) DeleteUserCredentials(c echo.Context) error {
-	userID := c.Param("user_id")
-
-	actualUserId, err := uuid.Parse(userID)
+	userIDstr := c.Param("user_id")
+	userId, err := strconv.ParseUint(userIDstr, 10, 64)
 	if err != nil {
-		return echo.NewHTTPError(
-			http.StatusBadRequest,
-			gud.NewErrorResponse("invalid id ", err.Error()),
-		)
+		return &gut.CustomError{
+			Code:         http.StatusBadRequest,
+			Message:      err.Error(),
+			InternalCode: "userId:Invalid:UpdateUserCredentials",
+		}
 	}
-	if err := h.authService.DeleteUserCredentials(actualUserId); err != nil {
+	if err := h.authService.DeleteUserCredentials(uint(userId)); err != nil {
 		return err
 	}
 

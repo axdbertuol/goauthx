@@ -30,7 +30,7 @@ type AuthServicer interface {
 		ucreds *models.UserCredentials,
 		dto *dtos.UpdateUserCredentialsDTO,
 	) error
-	GetAllUserIdentities(
+	GetAllUserCredentials(
 		req *http.Request,
 	) ([]dtos.UserCredentialsResponse, error)
 	CreateUserCredentials(
@@ -41,7 +41,7 @@ type AuthServicer interface {
 		ucreds *models.UserCredentials,
 		string uuid.UUID,
 	) error
-	DeleteUserCredentials(userId uuid.UUID) error
+	DeleteUserCredentials(userId uint) error
 	SignInWithGoogle(
 		tokenResp *dtos.TokenDTOResponse,
 		dto *dtos.LoginGoogleDTO,
@@ -141,6 +141,7 @@ func (as *AuthService) CreateUserCredentials(
 	ucreds.Email = dto.Email
 	ucreds.Role = dto.Role
 	ucreds.Status = dto.Status
+	ucreds.UserId = dto.UserId
 
 	if dto.PasswordHash != nil {
 		ucreds.PasswordHash = &dto.PasswordHash
@@ -210,7 +211,7 @@ func (as *AuthService) SignInWithGoogle(
 		Audience: []string{payload.Audience},
 	}
 	jwtGenDto := &dtos.JwtGenDTO{
-		UserId:   ucreds.UserId.String(),
+		UserId:   ucreds.UserId,
 		Username: ucreds.Username,
 		Email:    ucreds.Email,
 		Role:     ucreds.Role,
@@ -293,7 +294,7 @@ func (as *AuthService) Login(tokenResp *dtos.TokenDTOResponse, dto *dtos.LoginDT
 	}
 
 	jwtGenDto := &dtos.JwtGenDTO{
-		UserId:   ucreds.UserId.String(),
+		UserId:   ucreds.UserId,
 		Username: ucreds.Username,
 		Email:    ucreds.Email,
 		Role:     ucreds.Role,
@@ -411,7 +412,7 @@ func (as *AuthService) GetUserCredentialsByID(
 	return nil
 }
 
-func (as *AuthService) GetAllUserIdentities(
+func (as *AuthService) GetAllUserCredentials(
 	req *http.Request,
 ) ([]dtos.UserCredentialsResponse, error) {
 	ucreds := []models.UserCredentials{}
@@ -419,7 +420,7 @@ func (as *AuthService) GetAllUserIdentities(
 		return nil, &gut.CustomError{
 			Code:         http.StatusInternalServerError,
 			Message:      err.Error(),
-			InternalCode: ":UnknownError:GetAllUserIdentities",
+			InternalCode: ":UnknownError:GetAllUserCredentials",
 		}
 	}
 
@@ -430,10 +431,8 @@ func (as *AuthService) GetAllUserIdentities(
 	return mappedCreds, nil
 }
 
-func (as *AuthService) DeleteUserCredentials(userId uuid.UUID) error {
-	ucreds := new(models.UserCredentials)
-
-	if err := as.userCredRepo.GetFirst(ucreds, "id = ?", userId); err != nil {
+func (as *AuthService) DeleteUserCredentials(userId uint) error {
+	if err := as.userCredRepo.Delete(new(models.UserCredentials), userId); err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return &gut.CustomError{
 				Code:         http.StatusNotFound,
@@ -441,13 +440,6 @@ func (as *AuthService) DeleteUserCredentials(userId uuid.UUID) error {
 				InternalCode: "userCredentials:NotFound:DeleteUserCredentials",
 			}
 		}
-		return &gut.CustomError{
-			Code:         http.StatusInternalServerError,
-			Message:      err.Error(),
-			InternalCode: "userCredentials:UnknownErr:DeleteUserCredentials",
-		}
-	}
-	if err := as.userCredRepo.Delete(ucreds, userId); err != nil {
 		return &gut.CustomError{
 			Code:         http.StatusInternalServerError,
 			Message:      err.Error(),
