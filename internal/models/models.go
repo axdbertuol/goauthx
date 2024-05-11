@@ -5,7 +5,6 @@ import (
 	"log"
 
 	"github.com/axdbertuol/goauthx/internal/dtos"
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -17,13 +16,13 @@ type Transfer interface {
 type UserCredentials struct {
 	gorm.Model
 
-	UserId       uuid.UUID `gorm:"unique;not null;type:uuid;"`
-	Username     string    `gorm:"unique;not null"                     json:"username"` // username is from the auth microservice
-	Email        string    `gorm:"unique;not null"                     json:"email"`    // email is from the auth micro
-	PasswordHash *[]byte   `                                           json:"passwordHash"`
-	Role         string    `                                           json:"role"`
-	Status       string    `                                           json:"status"`
-	SocialId     *string   `gorm:"uniqueIndex:idx_social_id,omitempty" json:"socialId,omitempty"`
+	UserId       uint    `gorm:"unique;not null;"`
+	Username     string  `gorm:"unique;not null"                     json:"username"` // username is from the auth microservice
+	Email        string  `gorm:"unique;not null"                     json:"email"`    // email is from the auth micro
+	PasswordHash *[]byte `                                           json:"passwordHash"`
+	Role         string  `                                           json:"role"`
+	Status       string  `                                           json:"status"`
+	SocialId     *string `gorm:"uniqueIndex:idx_social_id,omitempty" json:"socialId,omitempty"`
 }
 
 func (u *UserCredentials) Validate() error {
