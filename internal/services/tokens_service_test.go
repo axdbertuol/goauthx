@@ -12,7 +12,7 @@ import (
 func TestGenerateTokens(t *testing.T) {
 	// Mock arguments for testing
 	usr := &dtos.JwtGenDTO{
-		UserId:   "123",
+		UserId:   uint(123),
 		Username: "testuser",
 		Role:     "user",
 	}
@@ -35,7 +35,7 @@ func TestGenerateTokens(t *testing.T) {
 }
 func BenchmarkGenerateTokens(b *testing.B) {
 	usr := &dtos.JwtGenDTO{
-		UserId:   "123",
+		UserId:   uint(123),
 		Username: "testuser",
 		Role:     "user",
 	}
