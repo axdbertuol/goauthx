@@ -19,7 +19,7 @@ services:
     image: postgres:16.1-alpine
     restart: always
     environment:
-      POSTGRES_USER: ${DATABASE_USERNAME}
+      POSTGRES_USER: ${DATABASE_USER}
       POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
       POSTGRES_DB: ${DATABASE_DBNAME}
     expose:

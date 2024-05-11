@@ -75,7 +75,7 @@ func main() {
 	if env == "local" {
 		viper.Set("DATABASE_HOST", "localhost")
 		viper.Set("DATABASE_PORT", "5433")
-		viper.Set("DATABASE_USERNAME", "postgres")
+		viper.Set("DATABASE_USER", "postgres")
 		viper.Set("DATABASE_PASSWORD", "postgres")
 		// viper.Set("DATABASE_DBNAME", "testdb")
 		viper.Set("KAFKA_BROKER_URL", "localhost:9092")
