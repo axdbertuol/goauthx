@@ -1,7 +1,5 @@
 package kafka_consumer
 
-import "github.com/google/uuid"
-
 type Event struct {
 	ID      string                 `json:"id"`
 	Type    string                 `json:"type"`
@@ -9,22 +7,22 @@ type Event struct {
 }
 
 type UserCreatePayload struct {
-	UserId       uuid.UUID `json:"userId"                 validate:"required"`
-	Username     string    `json:"username"               validate:"required"`
-	Email        string    `json:"email"                  validate:"required,email"`
-	PasswordHash []byte    `json:"passwordHash,omitempty" validate:"omitempty,required_without=SocialId"`
-	Status       string    `json:"status"                 validate:"required"`
-	Role         string    `json:"role"                   validate:"required"`
-	SocialId     string    `json:"socialId,omitempty"     validate:"omitempty,required_without=PasswordHash"`
+	UserId       uint   `json:"userId"                 validate:"required"`
+	Username     string `json:"username"               validate:"required"`
+	Email        string `json:"email"                  validate:"required,email"`
+	PasswordHash []byte `json:"passwordHash,omitempty" validate:"omitempty,required_without=SocialId"`
+	Status       string `json:"status"                 validate:"required"`
+	Role         string `json:"role"                   validate:"required"`
+	SocialId     string `json:"socialId,omitempty"     validate:"omitempty,required_without=PasswordHash"`
 }
 type UserUpdatePayload struct {
-	UserId       uuid.UUID `json:"userId"                 validate:"required"`
-	Username     *string   `json:"username,omitempty"     validate:"omitempty"`
-	Email        *string   `json:"email,omitempty"        validate:"omitempty,email"`
-	PasswordHash *[]byte   `json:"passwordHash,omitempty" validate:"omitempty"`
-	Status       *string   `json:"status,omitempty"       validate:"omitempty"`
-	Role         *string   `json:"role,omitempty"         validate:"omitempty"`
-	SocialId     *string   `json:"socialId,omitempty"     validate:"omitempty"`
+	UserId       uint    `json:"userId"                 validate:"required"`
+	Username     *string `json:"username,omitempty"     validate:"omitempty"`
+	Email        *string `json:"email,omitempty"        validate:"omitempty,email"`
+	PasswordHash *[]byte `json:"passwordHash,omitempty" validate:"omitempty"`
+	Status       *string `json:"status,omitempty"       validate:"omitempty"`
+	Role         *string `json:"role,omitempty"         validate:"omitempty"`
+	SocialId     *string `json:"socialId,omitempty"     validate:"omitempty"`
 }
 
 // Function to convert map[string]interface{} to UserCreatePayload struct
@@ -33,12 +31,8 @@ func MapToUserCreatePayload(data map[string]interface{}) (*UserCreatePayload, er
 
 	// Perform type assertions to extract values from the map
 
-	if userId, ok := data["userId"].(string); data["userId"] != 0 && ok {
-		parsedUuid, err := uuid.Parse(userId)
-		if err != nil {
-			return nil, err
-		}
-		payload.UserId = parsedUuid
+	if userId, ok := data["userId"].(uint); data["userId"] != 0 && ok {
+		payload.UserId = userId
 	}
 	if username, ok := data["username"].(string); data["username"] != "" && ok {
 		payload.Username = username
@@ -68,12 +62,8 @@ func MapToUserUpdatePayload(data map[string]interface{}) (*UserUpdatePayload, er
 
 	// Perform type assertions to extract values from the map
 
-	if userId, ok := data["userId"].(string); data["userId"] != 0 && ok {
-		parsedUuid, err := uuid.Parse(userId)
-		if err != nil {
-			return nil, err
-		}
-		payload.UserId = parsedUuid
+	if userId, ok := data["userId"].(uint); data["userId"] != 0 && ok {
+		payload.UserId = userId
 	}
 	if username, ok := data["username"].(*string); data["username"] != nil && ok {
 		payload.Username = username
