@@ -76,7 +76,7 @@ func MustInitEcho(m *testing.M, e *echo.Echo) {
 	exitVal := m.Run()
 
 	// Clean up test data if needed
-	scase.Cleanup("user_credentials")
+	scase.Cleanup(modelsList...)
 	os.Exit(exitVal)
 
 }

@@ -16,6 +16,9 @@ test:
 test_e2e:
 	go test ./e2e/auth_e2e_test.go -tags=e2e_tests
 
+test_e2e_ci:
+	go test ./e2e/auth_e2e_test.go -tags=e2e_tests -exec CI=true
+
 test_coverage:
 	go test ./... -coverprofile=coverage.out
 
