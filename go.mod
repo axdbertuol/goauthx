@@ -104,7 +104,7 @@ require (
 
 require (
 	ariga.io/atlas-provider-gorm v0.3.2
-	github.com/axdbertuol/goutils v0.105.1
+	github.com/axdbertuol/goutils v0.105.3
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.3 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
